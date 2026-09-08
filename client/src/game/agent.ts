@@ -1,6 +1,7 @@
 import { Container, Sprite, Graphics } from 'pixi.js';
 import type { Session } from '../../../shared/types.ts';
 import { hashStr, labelTexture } from './pixel.ts';
+import { plainAscii } from '../../../shared/names.ts';
 import {
   buildCharacter, bubbleTexture, shadowTexture, lookFor, signSprite, STATUS_COLORS,
   type Anim, type BubbleKind, type CharacterFrames, type Dir, type Look,
@@ -82,6 +83,9 @@ export class Agent extends Actor {
   private lastReconsider = 0;
   removed = false;
   seed: number;
+  /** Stoly, u kterých smí sedět (ostrůvek projektu). null = kdekoli. */
+  island: number[] | null = null;
+  private subs = new Map<string, Actor>();
 
   constructor(session: Session, private events: AgentEvents) {
     const seed = hashStr(session.id);
@@ -109,7 +113,7 @@ export class Agent extends Actor {
   }
 
   private setLabel() {
-    this.nameTag.texture = labelTexture(this.session.name, { color: '#ffffff' });
+    this.nameTag.texture = labelTexture(plainAscii(this.session.name), { color: '#ffffff' });
   }
 
   setHighlight(on: boolean) {
@@ -142,8 +146,41 @@ export class Agent extends Actor {
     this.session = s;
     if (prev.name !== s.name) this.setLabel();
     const zone = this.zoneForSession(s);
-    if (!this.slot || this.slot.zone !== zone) this.goTo(acquireSlot(ZONES[zone], s.id, this.seed), this.slot);
+    if (!this.slot || this.slot.zone !== zone) {
+      this.goTo(acquireSlot(ZONES[zone], s.id, this.seed, zone === 'desks' ? this.island ?? undefined : undefined), this.slot);
+    }
     this.refreshBubble();
+    this.syncSubagents(s);
+  }
+
+  setIsland(desks: number[] | null) {
+    const same = (a: number[] | null, b: number[] | null) => a === b || (!!a && !!b && a.length === b.length && a.every((v, i) => v === b[i]));
+    if (same(this.island, desks)) return;
+    this.island = desks;
+    if (this.slot?.zone === 'desks' && desks && !desks.includes(ZONES.desks.slots.indexOf(this.slot))) {
+      this.goTo(acquireSlot(ZONES.desks, this.session.id, this.seed, desks), this.slot);
+    }
+  }
+
+  /** Subagenti = malé postavičky vedle rodiče (děti kontejneru, chodí s ním). */
+  private syncSubagents(s: Session) {
+    const ids = new Set(s.subagents.map(a => a.id));
+    for (const [id, actor] of this.subs) {
+      if (!ids.has(id)) { this.removeChild(actor); actor.destroy({ children: true }); this.subs.delete(id); }
+    }
+    let i = 0;
+    for (const sub of s.subagents) {
+      let actor = this.subs.get(sub.id);
+      if (!actor) {
+        actor = new Actor(this.look);
+        actor.scale.set(0.5);
+        actor.play('type', 'down');
+        this.subs.set(sub.id, actor);
+        this.addChildAt(actor, 1);
+      }
+      actor.position.set(12 + i * 8, 2);
+      i++;
+    }
   }
 
   /** Time based transitions (waiting long enough → kitchen). */
@@ -222,6 +259,7 @@ export class Agent extends Actor {
     }
 
     super.tick(dt);
+    for (const a of this.subs.values()) { a.visible = !this.moving; a.tick(dt); }
     this.zIndex = this.y;
 
     this.bubbleBob += dt * 3;

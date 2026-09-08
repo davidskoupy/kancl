@@ -31,10 +31,12 @@ test('aktivní projekt na hraně dostane jen zbývající stoly', () => {
   assert.deepEqual(out[2].desks, [8, 9, 10, 11]);
 });
 
-test('planKey se mění jen s aktivními projekty a počty', () => {
+test('planKey se mění jen s aktivními projekty a počty, ne se stavem', () => {
   const k1 = planKey([p('a', 'prace'), p('b', 'klid')], { a: 1 });
   const k2 = planKey([p('a', 'prace'), p('c', 'klid')], { a: 1 });
   const k3 = planKey([p('a', 'prace'), p('b', 'klid')], { a: 2 });
+  const k4 = planKey([p('a', 'dotaz'), p('b', 'klid')], { a: 1 });
   assert.equal(k1, k2);
   assert.notEqual(k1, k3);
+  assert.equal(k1, k4);
 });

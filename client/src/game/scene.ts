@@ -1,4 +1,4 @@
-import { Application, Container, Sprite, Texture } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { Session, Project } from '../../../shared/types.ts';
 import { Px, labelTexture, drawText } from './pixel.ts';
 import { deskSprite, coffeeMachineSprite, plantSprite, USER_LOOK, type ObjectSprite } from './sprites.ts';
@@ -7,8 +7,10 @@ import {
   waterCoolerSprite, fridgeSprite, sofaSprite, roundTableSprite, printerSprite, clockSprite, posterSprite, cabinetSprite,
   nameplateSprite, type ScreenKind,
 } from './office.ts';
-import { W, H, TILE, COLS, ROWS, groundMap, USER_POS, workstations, ZONES, type Slot } from './world.ts';
+import { W, H, TILE, COLS, ROWS, groundMap, USER_POS, workstations, ZONES, deskCell, type Slot } from './world.ts';
 import { Actor, Agent } from './agent.ts';
+import { planIslands, planKey, type Island } from '../../../shared/plan.ts';
+import { plainAscii } from '../../../shared/names.ts';
 
 interface AnimatedObject { sprite: Sprite; frames: Texture[]; fps: number; t: number; i: number }
 
@@ -22,7 +24,11 @@ export class Scene {
   app = new Application();
   world = new Container();
   ground = new Container();
+  islands = new Container();
   objects = new Container();
+  private projects: Project[] = [];
+  private lastPlanKey = '__none__';
+  private islandPlan: Island[] = [];
   agents = new Map<string, Agent>();
   animated: AnimatedObject[] = [];
   screens = new Map<string, { sprite: Sprite; kind: ScreenKind; anim: AnimatedObject }>();
@@ -41,7 +47,7 @@ export class Scene {
     });
     this.host.appendChild(this.app.canvas);
     this.app.stage.addChild(this.world);
-    this.world.addChild(this.ground, this.objects);
+    this.world.addChild(this.ground, this.islands, this.objects);
     this.objects.sortableChildren = true;
 
     this.buildGround();
@@ -87,8 +93,8 @@ export class Scene {
         px.ctx.drawImage(tex.source.resource as HTMLCanvasElement, c * TILE, r * TILE);
       }
     }
-    drawText(px, 20, 134, 'YOUR OFFICE', 'rgba(0,0,0,0.25)');
-    drawText(px, 20, 262, 'KITCHEN', 'rgba(0,0,0,0.2)');
+    drawText(px, 20, 134, 'TVUJ KANCL', 'rgba(0,0,0,0.25)');
+    drawText(px, 20, 262, 'KUCHYNKA', 'rgba(0,0,0,0.2)');
     this.ground.addChild(new Sprite(px.texture()));
   }
 
@@ -143,13 +149,77 @@ export class Scene {
     this.user.position.set(USER_POS.x, USER_POS.y);
     this.user.zIndex = USER_POS.y;
     this.user.play('type', 'down');
-    const label = new Sprite(labelTexture('YOU', { color: '#f5c542' }));
+    const label = new Sprite(labelTexture('TY', { color: '#f5c542' }));
     label.anchor.set(0.5, 1); label.y = -26;
     this.user.addChild(label);
     this.objects.addChild(this.user);
   }
 
-  setProjects(_projects: Project[]) { /* Task 8 */ }
+  // ---- projekty / ostrůvky ---------------------------------------------
+  setProjects(projects: Project[]) { this.projects = projects; this.replan(); }
+
+  private sessionsByProject(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const a of this.agents.values()) {
+      const id = a.session.projectId;
+      if (id) out[id] = (out[id] ?? 0) + 1;
+    }
+    return out;
+  }
+
+  /** Aktivní projekty v pořadí, v jakém „přišly do práce" — ostrůvky se tak nepřeskládávají při každém dotazu. */
+  private activeOrder: string[] = [];
+  private orderedProjects(): Project[] {
+    const byId = new Map(this.projects.map(p => [p.id, p]));
+    const active = new Set(this.projects.filter(p => p.status !== 'klid').map(p => p.id));
+    this.activeOrder = this.activeOrder.filter(id => active.has(id));
+    for (const p of this.projects) if (active.has(p.id) && !this.activeOrder.includes(p.id)) this.activeOrder.push(p.id);
+    return [...this.activeOrder.map(id => byId.get(id)!), ...this.projects.filter(p => p.status === 'klid')];
+  }
+
+  private lastDrawKey = '';
+  private replan() {
+    const counts = this.sessionsByProject();
+    const ordered = this.orderedProjects();
+    const key = planKey(ordered, counts);
+    const klidIds = ordered.filter(p => p.status === 'klid').map(p => p.id).join(',');
+    const drawKey = `${key}#${klidIds}#${ordered.map(p => p.status).join(',')}#${ordered.map(p => p.name).join(',')}`;
+    if (drawKey === this.lastDrawKey) return;
+    this.lastDrawKey = drawKey;
+    this.islandPlan = planIslands(ordered, counts, ZONES.desks.slots.length);
+    this.drawIslands();
+    if (key === this.lastPlanKey) return;
+    this.lastPlanKey = key;
+    const byProject = new Map(this.islandPlan.map(i => [i.projectId, i.desks]));
+    for (const a of this.agents.values()) a.setIsland(a.session.projectId ? byProject.get(a.session.projectId) ?? null : null);
+  }
+
+  private drawIslands() {
+    for (const c of this.islands.removeChildren()) c.destroy({ children: true });
+    const COLORS = { prace: 0x3fb8b8, dotaz: 0xf5c542, klid: 0x6f7890 } as const;
+    const names = new Map(this.projects.map(p => [p.id, p.name]));
+    for (const isl of this.islandPlan) {
+      const color = COLORS[isl.status];
+      const alpha = isl.status === 'klid' ? 0.35 : 1;
+      const g = new Graphics();
+      const rows = new Map<number, number[]>();
+      for (const d of isl.desks) { const r = Math.floor(d / 4); rows.set(r, [...(rows.get(r) ?? []), d]); }
+      let first: { x: number; y: number } | undefined;
+      for (const desks of rows.values()) {
+        const a = deskCell(desks[0]), b = deskCell(desks[desks.length - 1]);
+        const x = a.x, y = a.y, w = b.x + b.w - a.x, h = a.h;
+        g.rect(x, y, w, h).fill({ color, alpha: 0.12 * alpha }).stroke({ color, width: 1, alpha: 0.8 * alpha });
+        if (!first) first = { x, y };
+      }
+      this.islands.addChild(g);
+      const hex = `#${color.toString(16).padStart(6, '0')}`;
+      const label = new Sprite(labelTexture(plainAscii(names.get(isl.projectId) ?? isl.projectId).slice(0, 14), { color: hex }));
+      label.anchor.set(0, 1);
+      label.position.set(first!.x + 2, first!.y);
+      label.alpha = alpha;
+      this.islands.addChild(label);
+    }
+  }
 
   // ---- sessions ----------------------------------------------------------
   upsert(session: Session) {
@@ -159,10 +229,15 @@ export class Scene {
         onTap: ag => this.select(ag.session.id),
         onHover: ag => { this.hover(ag?.session.id ?? null); },
       });
-      this.agents.set(session.id, a);
-      this.objects.addChild(a);
+      const agent = a;
+      this.agents.set(session.id, agent);
+      this.objects.addChild(agent);
+      this.replan();
+      const pid = agent.session.projectId;
+      if (pid) agent.setIsland(this.islandPlan.find(i => i.projectId === pid)?.desks ?? null);
     } else {
       a.apply(session);
+      this.replan();
     }
     if (this.selectedId === session.id || this.hoveredId === session.id) a.setHighlight(true);
   }
@@ -172,6 +247,7 @@ export class Scene {
     if (!a) return;
     a.leave();
     this.agents.delete(id);
+    this.replan();
     if (this.selectedId === id) this.select(null);
   }
 

@@ -112,12 +112,21 @@ export function overflowSlot(zone: ZoneId, agentId: string, seed: number): Slot 
   const s = kitchenSlot(99, 40 + n * 18, 250, 'idle'); s.id = `kitchen-ovf-${agentId}`; s.takenBy = agentId; return s;
 }
 
-export function acquireSlot(zone: Zone, agentId: string, seed: number): Slot {
+/** `allowed` = indexy stolů (ostrůvek projektu); když jsou všechny obsazené, vezme se libovolný volný. */
+export function acquireSlot(zone: Zone, agentId: string, seed: number, allowed?: number[]): Slot {
   const mine = zone.slots.find(s => s.takenBy === agentId);
-  if (mine) return mine;
-  const free = zone.slots.find(s => !s.takenBy);
+  const ok = (s: Slot) => !allowed || allowed.includes(zone.slots.indexOf(s));
+  if (mine && ok(mine)) return mine;
+  if (mine) releaseSlot(mine, agentId);
+  const free = zone.slots.find(s => !s.takenBy && ok(s)) ?? (allowed ? zone.slots.find(s => !s.takenBy) : undefined);
   if (free) { free.takenBy = agentId; return free; }
   return overflowSlot(zone.id, agentId, seed);
+}
+
+/** Obdélník podlahy kolem stolu `i` (pro rámeček ostrůvku). */
+export function deskCell(i: number): { x: number; y: number; w: number; h: number } {
+  const ws = workstations()[i];
+  return { x: ws.x - 4, y: ws.top - 6, w: 58, h: 62 };
 }
 
 export function releaseSlot(slot: Slot | undefined, agentId: string) {

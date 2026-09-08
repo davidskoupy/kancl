@@ -30,10 +30,13 @@ export function planIslands(projects: Project[], sessionsByProject: Record<strin
   return out;
 }
 
-/** Klíč, při jehož změně se má kancelář přeplánovat. Klidné projekty do něj nepatří. */
+/**
+ * Klíč, při jehož změně se mají postavičky přesadit: pořadí aktivních projektů a počty sezení.
+ * Stav (dotaz/práce) do něj záměrně nepatří, aby se při každém dotazu nepřesazovalo.
+ */
 export function planKey(projects: Project[], sessionsByProject: Record<string, number>): string {
   return projects
     .filter(p => p.status !== 'klid')
-    .map(p => `${p.id}:${p.status}:${sessionsByProject[p.id] ?? 0}`)
+    .map(p => `${p.id}:${sessionsByProject[p.id] ?? 0}`)
     .join('|');
 }
