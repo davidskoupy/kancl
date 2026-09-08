@@ -170,7 +170,7 @@ const server = http.createServer(async (req, res) => {
       const d = buildDigest(history.events, from, to);
       const waiting = store.list().filter(s => s.status === 'permission' || s.status === 'waiting' || s.status === 'error').map(s => ({ id: s.id, name: s.title ?? s.name, status: s.status, since: s.statusSince, project: s.project, message: s.message }));
       const ci = scanner.projects.filter(p => p.ci?.status === 'fail').map(p => ({ project: p.name, name: p.ci!.name, at: p.ci!.at, url: p.ci!.url }));
-      return json(res, 200, { ...d, waitingNow: waiting, ciFailingNow: ci, stock: night.night.stock, snapshotAt: night.night.snapshotAt });
+      return json(res, 200, { ...d, waitingNow: waiting, ciFailingNow: ci, stockNow: night.night.stock, snapshotAt: night.night.snapshotAt });
     }
 
     if (req.method === 'GET' && path === '/api/night') {

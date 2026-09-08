@@ -73,23 +73,31 @@ export class Panel {
   private projects: Project[] = [];
   private night: NightShift = { jobs: [], cloudSessions: [], scannedAt: 0 };
   private sel: Sel = null;
-  private filter: 'all' | 'attention' = 'all';
-  private showAllKlid = false;
+  private filter: 'all' | 'attention' = (localStorage.getItem('kancl.filter') as any) || 'all';
+  private showAllKlid = localStorage.getItem('kancl.showAllKlid') === '1';
+  private query = '';
+  private pinned = new Set<string>(JSON.parse(localStorage.getItem('kancl.pinned') || '[]'));
   private toastTimer?: number;
 
   constructor(private events: PanelEvents) {
     document.getElementById('demo-btn')!.addEventListener('click', () => this.events.onDemo());
     this.filters.innerHTML = `
-      <button class="chip on" data-f="all">Vše</button>
-      <button class="chip" data-f="attention">Chce mě</button>
-      <span class="spacer"></span>
+      <button class="chip ${this.filter === 'all' ? 'on' : ''}" data-f="all">Vše</button>
+      <button class="chip ${this.filter === 'attention' ? 'on' : ''}" data-f="attention">Chce mě</button>
+      <input id="search" class="search" type="search" placeholder="hledat…" autocomplete="off" spellcheck="false">
+      <a class="chip" href="/?digest=1" title="Co se stalo od včerejška">ráno</a>
       <button class="chip pref" id="notify-btn" title="Systémové notifikace, když tě někdo potřebuje">🔔</button>
       <button class="chip pref" id="sound-btn" title="Pípnutí při dotazu / chybě">🔈</button>`;
     this.filters.querySelectorAll<HTMLButtonElement>('.chip[data-f]').forEach(b => b.addEventListener('click', () => {
       this.filter = b.dataset.f as any;
+      localStorage.setItem('kancl.filter', this.filter);
       this.filters.querySelectorAll('.chip[data-f]').forEach(c => c.classList.toggle('on', c === b));
       this.render();
     }));
+    const search = this.filters.querySelector<HTMLInputElement>('#search')!;
+    search.addEventListener('input', () => { this.query = search.value.trim().toLowerCase(); this.render(); });
+    search.addEventListener('keydown', e => { if (e.key === 'Escape') { search.value = ''; this.query = ''; this.render(); search.blur(); } e.stopPropagation(); });
+    window.addEventListener('keydown', e => { if (e.key === '/' && document.activeElement !== search) { e.preventDefault(); search.focus(); } });
     window.setInterval(() => this.renderTimes(), 1000);
   }
 
@@ -149,8 +157,13 @@ export class Panel {
       else loose.push(s);
     }
     const sortS = (l: Session[]) => l.sort((a, b) => ORDER[a.status] - ORDER[b.status] || (ATTENTION.includes(a.status) ? a.statusSince - b.statusSince : a.startedAt - b.startedAt));
-    const out: Group[] = this.projects.map(p => ({ project: p, sessions: sortS(byProject.get(p.id) ?? []) }));
-    if (loose.length) out.unshift({ project: null, sessions: sortS(loose) });
+    const q = this.query;
+    const hit = (s: Session) => !q || `${s.name} ${s.title ?? ''} ${s.project} ${s.lastDetail ?? ''}`.toLowerCase().includes(q);
+    const projects = [...this.projects].sort((a, b) => Number(this.pinned.has(b.id)) - Number(this.pinned.has(a.id)));
+    let out: Group[] = projects.map(p => ({ project: p, sessions: sortS((byProject.get(p.id) ?? []).filter(hit)) }));
+    if (q) out = out.filter(g => g.sessions.length || `${g.project!.name} ${g.project!.id} ${g.project!.group ?? ''}`.toLowerCase().includes(q));
+    const looseHit = sortS(loose.filter(hit));
+    if (looseHit.length) out.unshift({ project: null, sessions: looseHit });
     return out;
   }
 
@@ -173,12 +186,20 @@ export class Panel {
     let n = 0;                          // číslování sezení
     let klidShown = 0, klidHidden = 0;
     const html: string[] = [];
+    let lastGroup: string | null | undefined = undefined;
+    const showGroups = this.projects.some(p => p.group);
     for (const g of groups) {
       const p = g.project;
       const status = p ? p.status : 'prace';
       const isKlid = status === 'klid';
-      if (isKlid && !this.showAllKlid && klidShown >= KLID_VISIBLE) { klidHidden++; continue; }
-      if (isKlid) klidShown++;
+      const pinned = !!p && this.pinned.has(p.id);
+      if (isKlid && !pinned && !this.query && !this.showAllKlid && klidShown >= KLID_VISIBLE) { klidHidden++; continue; }
+      if (isKlid && !pinned) klidShown++;
+      const groupName = p ? (p.group ?? null) : '__loose__';
+      if (showGroups && p && groupName !== lastGroup) {
+        html.push(`<li class="ghead">${esc(groupName ?? 'ostatní')}</li>`);
+        lastGroup = groupName;
+      }
       const id = p?.id ?? LOOSE_ID;
       const open = !isKlid || (this.sel?.kind === 'project' && this.sel.id === id);
       const selected = this.sel?.kind === 'project' && this.sel.id === id;
@@ -203,7 +224,7 @@ export class Panel {
           <div class="proj-row">
             <i class="pdot"></i>
             <span class="pname">${p ? esc(p.name) : 'mimo projekty'}</span>
-            <span class="phost">${p ? HOST_LABEL[p.host] : ''}</span>
+            <span class="phost">${p ? `<button class="pin ${pinned ? 'on' : ''}" data-pin="${esc(p.id)}" title="${pinned ? 'odepnout' : 'připnout nahoru'}">📌</button>${HOST_LABEL[p.host]}` : ''}</span>
             <span class="pmeta">${p ? this.projectMeta(p) : `${g.sessions.length} ${plural(g.sessions.length, 'sezení', 'sezení', 'sezení')}`}</span>
           </div>
           <ul class="sessions">${sessionsHtml}</ul>
@@ -232,16 +253,27 @@ export class Panel {
     });
     this.list.querySelector<HTMLElement>('.more')?.addEventListener('click', e => {
       this.showAllKlid = (e.currentTarget as HTMLElement).dataset.more === '1';
+      localStorage.setItem('kancl.showAllKlid', this.showAllKlid ? '1' : '0');
       this.render();
     });
+    this.list.querySelectorAll<HTMLElement>('[data-pin]').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = b.dataset.pin!;
+      if (this.pinned.has(id)) this.pinned.delete(id); else this.pinned.add(id);
+      localStorage.setItem('kancl.pinned', JSON.stringify([...this.pinned]));
+      this.render();
+    }));
 
     this.renderSummary(all);
     this.renderDetails();
   }
 
   private renderNight(): string {
-    const jobs = this.filter === 'attention' ? this.night.jobs.filter(j => j.state === 'chyba') : this.night.jobs;
-    if (!jobs.length && !this.night.stock) return '';
+    const q = this.query;
+    let jobs = this.filter === 'attention' ? this.night.jobs.filter(j => j.state === 'chyba') : this.night.jobs;
+    if (q) jobs = jobs.filter(j => `${j.name} ${j.description ?? ''} ${j.scheduleHuman}`.toLowerCase().includes(q));
+    if (!jobs.length && !this.night.stock && !q) return '';
+    if (q && !jobs.length && !this.night.cloudSessions.some(c => c.name.toLowerCase().includes(q))) return '';
     const stock = this.night.stock;
     const stockHtml = stock ? `
       <li class="stock ${stock.items.some(i => i.alarm) ? 'alarm' : ''}" title="zásoba témat content enginu (${dayClock(stock.at)})">
@@ -276,11 +308,11 @@ export class Panel {
       const old = Date.now() - n.snapshotAt > 2 * 3600_000;
       snap = `<span class="snap ${old ? 'old' : ''}" title="${old ? 'Snímek cloudu je starý, aplikace Claude asi neběžela' : 'snímek cloudu z úlohy kancl-cloud-snapshot'}">cloud ${old ? 'z ' : ''}${dayClock(n.snapshotAt)}</span>`;
     }
-    const cloudRows = n.cloudSessions.map(c => `
+    const cloudRows = n.cloudSessions.filter(c => !q || c.name.toLowerCase().includes(q)).map(c => `
       <li class="csess ${c.status}" title="${esc(c.kind === 'cloud' ? 'cloudové sezení' : 'Remote Control')}">
         <i class="cdot"></i><span class="cname">${esc(c.name)}</span><span class="cst">${c.status === 'working' ? 'pracuje' : c.status === 'idle' ? 'čeká' : 'offline'}${c.kind === 'remote-control' ? ' · RC' : ''}</span>
       </li>`).join('');
-    const cloudSection = n.cloudSessions.length ? `<li class="nhead"><span>V cloudu</span><span class="muted">${n.cloudSessions.length} ${plural(n.cloudSessions.length, 'sezení', 'sezení', 'sezení')}</span></li>${cloudRows}` : '';
+    const cloudSection = cloudRows ? `<li class="nhead"><span>V cloudu</span><span class="muted">${n.cloudSessions.length} ${plural(n.cloudSessions.length, 'sezení', 'sezení', 'sezení')}</span></li>${cloudRows}` : '';
     return `<li class="nhead"><span>Noční směna</span><span class="muted">${jobs.length} ${plural(jobs.length, 'úloha', 'úlohy', 'úloh')}${snap ? ' · ' + snap : ''}</span></li>${rows}${stockOrphan}${cloudSection}`;
   }
 

@@ -120,6 +120,42 @@ názvy, rozvrhy, stav posledního běhu, odkazy. Žádné prompty, žádný obsa
   protože lokální úlohy běží jen s otevřenou aplikací.
 - Cestu snímku mění `night.cloudSnapshot` v configu.
 
+## Sezení z desktopové aplikace
+
+Kancl čte názvy sezení z aplikace Claude (`local_*.json` v Application Support) a páruje je s hooky, takže v panelu
+vidíš „Fragmento HTML šablona", ne jen přezdívku. **Enter** (nebo „Otevřít v aplikaci Claude") otevře sezení přes
+`claude://code/continue?session=…`. **Tab** přeskakuje na nejdéle čekající sezení, Shift+Tab zpět, **/** skočí do hledání.
+
+- `?mini=1` — pruh do rohu obrazovky: souhrn, fronta „chce mě", stav noční směny. Bez pixelové scény.
+  Otevři ho v samostatném okně (Chrome → Vytvořit zástupce / otevřít jako aplikaci) a nech nahoře.
+- `?digest=1` — ranní přehled: co se stalo od včerejška (skončená sezení, noční směna, CI selhání, zásoba témat,
+  kdo teď čeká). Data jsou i na `GET /api/digest?since=<ms>` (pro skill `/morning`).
+
+## Zdraví projektu
+
+- **GitHub Actions**: u GitHub projektů poslední 3 běhy (`gh run list`), v panelu `CI ✗` / `CI …`, v detailu odkazy.
+  Kancl žádné workflow nezakládá, jen čte.
+- **Stárnutí**: „nejstarší 9 d" u necommitnutých změn; worktree, jehož větev je sloučená a 14 dní se nehnul,
+  dostane štítek `zastaralé` a tlačítko, které zkopíruje `git worktree remove …` do schránky. Kancl nic nemaže.
+- **Notifikace noční směny**: selhání úlohy, starý snímek cloudu, nový alarm zásoby témat (stejné 🔔 / 🔈 jako u sezení).
+- **Historie**: `~/.kancl/history.jsonl`, 7 dní (skončená sezení, úlohy ok/chyba, CI selhání, alarmy). `GET /api/history?since=<ms>`.
+
+## Skupiny, hledání, připnutí
+
+Projekty se v panelu řadí do skupin z configu (`groups`, glob na id nebo název; výchozí Shean / Klienti / Vlastní weby,
+zbytek „ostatní"). Špendlík u projektu ho drží nahoře i v klidu. Hledání filtruje projekty, sezení, úlohy i cloud.
+Rozbalení, filtr, zoom a připnutí přežijí reload.
+
+## Kancl v mobilu (Tailscale)
+
+Kancl poslouchá jen na `127.0.0.1`. Když ho chceš v telefonu, pusť server na adrese tailnetu (nikdy `0.0.0.0`):
+
+```bash
+KANCL_HOST=100.x.y.z npx tsx server/index.ts
+```
+
+a v telefonu otevři `http://100.x.y.z:4242/?mini=1`. Hook skript posílá dál na `127.0.0.1`, takže ho to neovlivní.
+
 ## Config
 
 `~/.config/kancl/config.json` vznikne při prvním startu:
@@ -144,6 +180,7 @@ názvy, rozvrhy, stav posledního běhu, odkazy. Žádné prompty, žádný obsa
 - `roots` — složky, ve kterých se hledají projekty (jen první úroveň).
 - `hidden` — id projektů (`github.com/user/repo`) nebo názvy složek, které se nemají ukazovat.
 - `gitlabHosts` — hostitelé, které se mají brát jako GitLab (kromě těch, co mají „gitlab" v názvu).
+- `groups` — skupiny projektů: `[{ "name": "Shean", "match": ["gitlab.shean.dev/*"] }, …]`.
 - `night.enabled` — vypne noční směnu.
 - `night.engines` — logy enginů: `runsFile`, volitelně `stateFile`, `taskId` (id naplánované úlohy, ke které výsledek patří)
   a `columns` (indexy sloupců tabulky, výchozí `| datum | web | téma | výsledek | poznámka |`).

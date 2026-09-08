@@ -194,3 +194,30 @@ body.mini #app { display: none; }
 .ci.fail { color: var(--error); } .ci.run { color: var(--working); }
 .stale { color: var(--permission); }
 .btn.xs { padding: 1px 6px; font-size: 10px; margin-left: 4px; }
+
+/* ---- přehled: hledání, skupiny, připnutí ---- */
+.search { flex: 1; min-width: 70px; font-size: 11px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 2px 8px; outline: none; }
+.search:focus { border-color: var(--muted); }
+a.chip { text-decoration: none; }
+.ghead { font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); padding: 10px 8px 2px; }
+.ghead:first-child { padding-top: 2px; }
+.pin { background: none; border: 0; cursor: pointer; font-size: 10px; opacity: 0; padding: 0 3px; filter: grayscale(1); }
+.proj-row:hover .pin, .pin.on { opacity: 1; }
+.pin.on { filter: none; }
+
+/* ---- ranní přehled (?digest=1) ---- */
+body.digest #app { display: none; }
+.digest-root { max-width: 720px; margin: 0 auto; padding: 28px 20px 60px; font-size: 14px; line-height: 1.5; }
+.digest-root h1 { font-family: var(--font-pix); font-size: 16px; margin: 0 0 6px; }
+.digest-root h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 22px 0 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.digest-root ul { list-style: none; margin: 0; padding: 0; }
+.digest-root li { display: grid; grid-template-columns: 82px 1fr; gap: 10px; padding: 6px 0; border-top: 1px dashed var(--line); }
+.digest-root li:first-child { border-top: 0; }
+.digest-root li[data-id] { cursor: pointer; } .digest-root li[data-id]:hover b { color: var(--accent); }
+.digest-root .dt { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.digest-root .dmuted { color: var(--muted); } .digest-root .small { font-size: 12px; }
+.digest-root .dsum { font-size: 13px; }
+.digest-root .alarm { color: var(--permission); }
+.digest-root li.permission b { color: var(--permission); } .digest-root li.error b { color: var(--error); } .digest-root li.ok .dt { color: var(--completed); }
+.digest-root button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; font-size: 11px; cursor: pointer; }
+.digest-root a { color: var(--accent); }

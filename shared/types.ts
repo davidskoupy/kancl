@@ -66,6 +66,7 @@ export interface Project {
   mrs: MergeRequest[];
   mrsError?: string;
   ci?: CiState;          // GitHub Actions: poslední běhy (jen čtení)
+  group?: string;        // skupina z configu (Shean, Klienti, Weby…)
   status: ProjectStatus; // odvozený ze sezení
   lastActivity: number;  // ms
   activeSince?: number;  // ms, start nejstaršího běžícího sezení (stabilní pořadí aktivních)

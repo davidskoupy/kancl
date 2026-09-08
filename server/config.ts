@@ -18,6 +18,7 @@ export interface Config {
   remoteIntervalMin: number;
   gitlabHosts: string[];
   night: { enabled: boolean; engines: EngineConfig[]; cloudSnapshot: string };
+  groups: { name: string; match: string[] }[];
 }
 
 const DEFAULTS: Config = {
@@ -26,6 +27,11 @@ const DEFAULTS: Config = {
   gitIntervalSec: 15,
   remoteIntervalMin: 5,
   gitlabHosts: ['gitlab.shean.dev'],
+  groups: [
+    { name: 'Shean', match: ['gitlab.shean.dev/*', '*/niko-orchestrator'] },
+    { name: 'Klienti', match: ['*/Dopner', '*/dopner*', 'github.com/behavera-com/*'] },
+    { name: 'Vlastní weby', match: ['*/deky', '*/katalogodpadu', '*/baliky', '*/zahradni-domky-vyprodej', '*/kayla-rebuild', '*/vitalis', '*/apartina', '*/content-engine', '*/krypto', '*/petriedu20'] },
+  ],
   night: {
     enabled: true,
     cloudSnapshot: '~/.kancl/cloud.json',
@@ -51,9 +57,9 @@ export function loadConfig(): Config {
   }
   try {
     const raw = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
-    const cfg: Config = { ...DEFAULTS, ...raw, night: { ...DEFAULTS.night, ...(raw.night ?? {}) } };
-    // starší config bez sekce night → doplnit na disk, ať je vidět, co jde nastavit
-    if (!raw.night) writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n');
+    const cfg: Config = { ...DEFAULTS, ...raw, night: { ...DEFAULTS.night, ...(raw.night ?? {}) }, groups: raw.groups ?? DEFAULTS.groups };
+    // starší config bez nových sekcí → doplnit na disk, ať je vidět, co jde nastavit
+    if (!raw.night || !raw.groups) writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n');
     return cfg;
   } catch (e) {
     console.error(`[config] ${CONFIG_PATH} se nedá načíst, používám výchozí:`, e);

@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import { join } from 'node:path';
 import type { Config } from './config.ts';
 import { expandHome, gitlabToken } from './config.ts';
-import { groupFolders, fillStatus, sortProjects, projectIdForCwd, type FolderInfo } from './projects.ts';
+import { groupFolders, fillStatus, sortProjects, projectIdForCwd, assignGroups, type FolderInfo } from './projects.ts';
 import type { Store } from './state.ts';
 import type { CiRun, CiState, MergeRequest, Project, Worktree } from '../shared/types.ts';
 
@@ -130,7 +130,7 @@ export class Scanner {
 
   /** Sezení se změnilo → přepočítat stav projektů (levné, jen v paměti). */
   publish() {
-    const filled = sortProjects(fillStatus(this.raw, this.store.list()));
+    const filled = assignGroups(sortProjects(fillStatus(this.raw, this.store.list())), this.cfg.groups);
     const json = JSON.stringify(filled);
     if (json === this.lastJson) return;
     this.lastJson = json;

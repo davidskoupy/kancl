@@ -75,3 +75,19 @@ export function sortProjects(projects: Project[]): Project[] {
     || (a.activeSince !== undefined && b.activeSince !== undefined ? a.activeSince - b.activeSince : b.lastActivity - a.lastActivity)
     || a.name.localeCompare(b.name, 'cs'));
 }
+
+// ---- skupiny --------------------------------------------------------------
+export interface GroupConfig { name: string; match: string[] }
+
+/** Jednoduchý glob: `*` = cokoliv, bez ohledu na velikost písmen. */
+export function matchGlob(value: string, glob: string): boolean {
+  const re = new RegExp('^' + glob.split('*').map(x => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$', 'i');
+  return re.test(value);
+}
+
+export function assignGroups(projects: Project[], groups: GroupConfig[]): Project[] {
+  return projects.map(p => {
+    const g = groups.find(gr => gr.match.some(m => matchGlob(p.id, m) || matchGlob(p.name, m)));
+    return { ...p, group: g?.name };
+  });
+}
