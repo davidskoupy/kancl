@@ -61,6 +61,7 @@ export interface Project {
   mrsError?: string;
   status: ProjectStatus; // odvozený ze sezení
   lastActivity: number;  // ms
+  activeSince?: number;  // ms, start nejstaršího běžícího sezení (stabilní pořadí aktivních)
   scannedAt: number;
 }
 

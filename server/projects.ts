@@ -61,12 +61,17 @@ export function fillStatus(projects: Project[], sessions: Session[]): Project[] 
     else if (mine.length) status = 'prace';
     const lastCommit = Math.max(0, ...p.worktrees.map(w => (w.lastCommit?.at ?? 0) * 1000));
     const lastSeen = Math.max(0, ...mine.map(s => s.lastSeen));
-    return { ...p, status, lastActivity: Math.max(lastCommit, lastSeen) };
+    const activeSince = mine.length ? Math.min(...mine.map(s => s.startedAt)) : undefined;
+    return { ...p, status, lastActivity: Math.max(lastCommit, lastSeen), activeSince };
   });
 }
 
 const RANK: Record<ProjectStatus, number> = { dotaz: 0, prace: 1, klid: 2 };
 
+/** dotaz → práce → klid; aktivní podle toho, kdo přišel do práce dřív; klidné podle poslední aktivity. */
 export function sortProjects(projects: Project[]): Project[] {
-  return [...projects].sort((a, b) => RANK[a.status] - RANK[b.status] || b.lastActivity - a.lastActivity || a.name.localeCompare(b.name, 'cs'));
+  return [...projects].sort((a, b) =>
+    RANK[a.status] - RANK[b.status]
+    || (a.activeSince !== undefined && b.activeSince !== undefined ? a.activeSince - b.activeSince : b.lastActivity - a.lastActivity)
+    || a.name.localeCompare(b.name, 'cs'));
 }

@@ -49,6 +49,17 @@ test('fillStatus a sortProjects: dotaz, práce, klid podle aktivity', () => {
   assert.deepEqual(sorted.map(p => [p.name, p.status]), [['b', 'dotaz'], ['a', 'prace'], ['c', 'klid'], ['d', 'klid']]);
 });
 
+test('aktivní projekty drží pořadí podle startu prvního sezení, ne podle posledního hooku', () => {
+  const projects = groupFolders([
+    { path: '/c/a', remoteUrl: 'https://github.com/x/a.git' },
+    { path: '/c/b', remoteUrl: 'https://github.com/x/b.git' },
+  ], [], []);
+  const sa = { ...sess('/c/a', 'working', 'github.com/x/a'), startedAt: 100, lastSeen: 900 };
+  const sb = { ...sess('/c/b', 'working', 'github.com/x/b'), startedAt: 50, lastSeen: 100 };
+  const sorted = sortProjects(fillStatus(projects, [sa, sb]));
+  assert.deepEqual(sorted.map(p => p.name), ['b', 'a']);
+});
+
 test('projectIdForCwd najde projekt i pro podsložku', () => {
   const projects = groupFolders([{ path: '/c/a', remoteUrl: 'https://github.com/x/a.git' }], [], []);
   assert.equal(projectIdForCwd('/c/a/src/x', projects), 'github.com/x/a');

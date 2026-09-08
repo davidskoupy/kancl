@@ -81,8 +81,10 @@ export class KanclClient {
     this.projects = this.demoProjects.map(p => {
       const mine = list.filter(s => s.projectId === p.id);
       const status: Project['status'] = mine.some(s => s.status === 'permission') ? 'dotaz' : mine.length ? 'prace' : 'klid';
-      return { ...p, status, lastActivity: Math.max(p.lastActivity, ...mine.map(s => s.lastSeen)) };
-    }).sort((a, b) => rank[a.status] - rank[b.status] || b.lastActivity - a.lastActivity);
+      const activeSince = mine.length ? Math.min(...mine.map(s => s.startedAt)) : undefined;
+      return { ...p, status, lastActivity: Math.max(p.lastActivity, ...mine.map(s => s.lastSeen)), activeSince };
+    }).sort((a, b) => rank[a.status] - rank[b.status]
+      || (a.activeSince !== undefined && b.activeSince !== undefined ? a.activeSince - b.activeSince : b.lastActivity - a.lastActivity));
     this.events.onProjects(this.projects);
   }
 
