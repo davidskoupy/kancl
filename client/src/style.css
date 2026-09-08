@@ -165,3 +165,27 @@ html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
 .csess .cname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .csess .cst { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
 .details a.btn { text-decoration: none; display: inline-block; }
+
+/* ---- mini režim (?mini=1) ---- */
+body.mini #app { display: none; }
+.mini-root { padding: 8px 10px; font-size: 12px; min-height: 100vh; background: var(--bg); }
+.mhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.mhead b { font-family: var(--font-pix); font-size: 11px; letter-spacing: .5px; }
+.mhead span { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.mhead em { color: var(--permission); font-style: normal; font-weight: 600; }
+.mlist { list-style: none; margin: 0; padding: 4px 0; }
+.mrow { display: grid; grid-template-columns: 6px 1fr auto auto; gap: 8px; align-items: center; padding: 5px 4px; border-radius: 6px; cursor: pointer; }
+.mrow:hover { background: var(--panel-2); }
+.mrow i { width: 6px; height: 18px; border-radius: 2px; background: var(--idle); }
+.mrow.permission i { background: var(--permission); animation: pulse 1s infinite; } .mrow.error i { background: var(--error); }
+.mrow.waiting i { background: var(--waiting); } .mrow.completed i { background: var(--completed); }
+.mname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mname small { display: block; color: var(--muted); font-weight: 400; font-size: 10px; }
+.mst { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.mrow.permission .mst { color: var(--permission); } .mrow.error .mst { color: var(--error); }
+.mago { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; }
+.mempty { color: var(--muted); padding: 8px 4px; }
+.mfoot { color: var(--muted); font-size: 11px; padding-top: 6px; border-top: 1px solid var(--line); }
+.mfoot.err b { color: var(--error); }
+.mfoot .old { color: var(--permission); }
+.session .name .proj { max-width: 120px; }

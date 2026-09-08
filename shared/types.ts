@@ -118,6 +118,8 @@ export interface Session {
   colorIndex: number;
   cwd: string;
   project: string;          // název složky (basename cwd)
+  title?: string;           // název sezení z desktopové aplikace Claude
+  desktopId?: string;       // local_… pro deep link claude://code/continue?session=
   projectId?: string;       // Project.id, pokud cwd leží v naskenovaném projektu
   status: SessionStatus;
   statusSince: number;

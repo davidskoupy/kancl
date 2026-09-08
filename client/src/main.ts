@@ -2,8 +2,30 @@ import { Scene } from './game/scene.ts';
 import { KanclClient } from './net.ts';
 import { Panel } from './ui/panel.ts';
 import { Attention } from './ui/attention.ts';
+import { Mini } from './ui/mini.ts';
+
+async function bootMini() {
+  document.body.classList.add('mini');
+  const host = document.getElementById('mini')!;
+  host.hidden = false;
+  let client: KanclClient;
+  const mini = new Mini(host, async id => { try { await client.focus(id); } catch { /* server neodpovídá */ } });
+  client = new KanclClient({
+    onUpsert: s => mini.upsert(s),
+    onRemove: id => mini.remove(id),
+    onState: () => {},
+    onProjects: () => {},
+    onNight: n => mini.setNight(n),
+  });
+  const attention = new Attention({ onOpen: id => client.focus(id) });
+  client.events.onUpsert = s => { mini.upsert(s); attention.upsert(s); };
+  client.events.onRemove = id => { mini.remove(id); attention.remove(id); };
+  const params = new URLSearchParams(location.search);
+  if (params.has('demo')) client.startDemo(); else client.connect();
+}
 
 async function boot() {
+  if (new URLSearchParams(location.search).has('mini')) return bootMini();
   const host = document.getElementById('canvas-host')!;
   const stage = document.getElementById('stage')!;
 
@@ -44,7 +66,7 @@ async function boot() {
   async function focus(id: string) {
     const s = client.sessions.get(id);
     if (!s) return;
-    panel.showToast(`Otevírám terminál ${s.name}…`);
+    panel.showToast(s.desktopId ? `Otevírám ${s.title ?? s.name} v aplikaci Claude…` : `Otevírám terminál ${s.name}…`);
     try {
       const r = await client.focus(id);
       panel.showToast(r);
@@ -73,6 +95,15 @@ async function boot() {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'Escape') { scene.select(null); return; }
     if (e.key === 'Enter' && scene.selectedId) { focus(scene.selectedId); return; }
+    if (e.key === 'Tab') {
+      const q = panel.queue();
+      if (!q.length) return;
+      e.preventDefault();
+      const i = q.findIndex(s => s.id === scene.selectedId);
+      const next = e.shiftKey ? (i <= 0 ? q.length - 1 : i - 1) : (i + 1) % q.length;
+      scene.select(q[next].id);
+      return;
+    }
     const n = Number(e.key);
     if (n >= 1 && n <= 9) {
       const s = panel.sorted()[n - 1];

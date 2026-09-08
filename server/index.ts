@@ -9,6 +9,7 @@ import { focusTerminal } from './focus.ts';
 import { loadConfig } from './config.ts';
 import { Scanner } from './scanner.ts';
 import { NightScanner } from './nightScanner.ts';
+import { DesktopIndex } from './desktop.ts';
 import type { ServerMessage } from '../shared/types.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -20,6 +21,8 @@ const store = new Store();
 const clients = new Set<http.ServerResponse>();
 
 const config = loadConfig();
+const desktop = new DesktopIndex(undefined, () => store.refreshDesktop());
+store.desktopResolver = id => { const d = desktop.lookup(id); return d ? { desktopId: d.desktopId, title: d.title } : undefined; };
 const night = new NightScanner(config, store, n => {
   const msg: ServerMessage = { type: 'night', night: n };
   const line = `data: ${JSON.stringify(msg)}\n\n`;
@@ -161,7 +164,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && focusMatch) {
       const s = store.sessions.get(decodeURIComponent(focusMatch[1]));
       if (!s) return json(res, 404, { error: 'unknown session' });
-      const result = await focusTerminal(s.terminal);
+      const result = await focusTerminal(s.terminal, s.desktopId);
       return json(res, 200, { ok: true, result });
     }
 
@@ -187,6 +190,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Kancl → http://${HOST}:${PORT}`);
+  desktop.start().catch(e => console.error('[desktop]', e));
   scanner.start().then(() => night.start()).catch(e => console.error('[scanner]', e));
   console.log(`  hooky posílají POST http://${HOST}:${PORT}/hook`);
   if (!existsSync(join(DIST, 'index.html'))) {

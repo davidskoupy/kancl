@@ -17,7 +17,7 @@ export class KanclClient {
   state: ConnState = 'connecting';
   private es?: EventSource;
 
-  constructor(private events: ClientEvents) {}
+  constructor(public events: ClientEvents) {}
 
   connect() {
     this.es?.close();
@@ -137,7 +137,7 @@ export class KanclClient {
     ];
     const dp = this.demoProjects;
     const mk = (i: number, status: Session['status'], activity: Session['activity'], extra: Partial<Session> = {}): Session => ({
-      id: `demo-${i}`, name: names[i % names.length], colorIndex: i,
+      id: `demo-${i}`, name: names[i % names.length], colorIndex: i, title: ['Oprava košíku', 'Typecheck a testy', 'Build landing', 'Migrace designu', 'TODO audit', 'Nový cluster', 'Dokumentace košíku'][i], desktopId: `local_demo-${i}`,
       cwd: dp[i].worktrees[0].path, project: dp[i].name, projectId: dp[i].id, status, statusSince: now, activity,
       terminal: { program: 'Apple_Terminal' }, startedAt: now - i * 60_000, lastSeen: now,
       turns: 1 + i, toolCalls: i * 7, subagents: [],

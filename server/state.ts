@@ -79,6 +79,8 @@ export class Store {
   serverStartedAt = Date.now();
   /** cwd → Project.id; nastavuje skener projektů. */
   projectResolver?: (cwd: string) => string | undefined;
+  /** CLI session id → název a id sezení v desktopové aplikaci. */
+  desktopResolver?: (cliSessionId: string) => { desktopId: string; title?: string } | undefined;
 
   constructor(private opts: { maxEvents?: number } = {}) {}
 
@@ -116,6 +118,7 @@ export class Store {
         turns: 0, toolCalls: 0, subagents: [], events: [],
       };
       s.projectId = this.projectResolver?.(s.cwd);
+      this.applyDesktop(s);
       this.sessions.set(id, s);
     }
     if (typeof hook.cwd === 'string' && hook.cwd !== s.cwd) {
@@ -283,6 +286,19 @@ export class Store {
 
     this.broadcast({ type: 'upsert', session: s });
     return s;
+  }
+
+  private applyDesktop(s: Session): boolean {
+    const d = this.desktopResolver?.(s.id);
+    if (!d) return false;
+    const changed = d.desktopId !== s.desktopId || d.title !== s.title;
+    s.desktopId = d.desktopId; s.title = d.title;
+    return changed;
+  }
+
+  /** Doplní názvy z desktopové aplikace (po změně indexu). */
+  refreshDesktop() {
+    for (const s of this.sessions.values()) if (this.applyDesktop(s)) this.broadcast({ type: 'upsert', session: s });
   }
 
   /** Znovu přiřadí projekty všem sezením (po doskenování projektů). */

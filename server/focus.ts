@@ -22,7 +22,13 @@ function esc(s: string) {
  *   otherwise  -> activate the app by bundle id / TERM_PROGRAM
  * Returns a short description of what it did.
  */
-export async function focusTerminal(t: TerminalInfo): Promise<string> {
+export async function focusTerminal(t: TerminalInfo, desktopId?: string): Promise<string> {
+  // Desktopová aplikace Claude: deep link na konkrétní sezení (ověřeno v bundlu: claude://code/continue?session=local_…)
+  if (desktopId && /^local_[A-Za-z0-9-]{1,64}$/.test(desktopId)) {
+    await run('open', [`claude://code/continue?session=${desktopId}`], { timeout: 3000 }).catch(() => {});
+    await run('open', ['-b', 'com.anthropic.claudefordesktop'], { timeout: 3000 }).catch(() => {});
+    return 'aplikace Claude: sezení otevřeno';
+  }
   const program = t.program ?? '';
   const bundle = t.bundleId ?? '';
   const tty = t.tty ?? '';

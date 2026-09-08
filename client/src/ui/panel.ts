@@ -1,4 +1,5 @@
 import type { Session, SessionStatus, Project, Worktree, MergeRequest, NightShift, Job } from '../../../shared/types.ts';
+import { attentionQueue } from './mini.ts';
 
 export interface PanelEvents {
   onSelect: (id: string | null) => void;
@@ -147,11 +148,14 @@ export class Panel {
       if (s.projectId && this.projects.some(p => p.id === s.projectId)) byProject.set(s.projectId, [...(byProject.get(s.projectId) ?? []), s]);
       else loose.push(s);
     }
-    const sortS = (l: Session[]) => l.sort((a, b) => ORDER[a.status] - ORDER[b.status] || a.startedAt - b.startedAt);
+    const sortS = (l: Session[]) => l.sort((a, b) => ORDER[a.status] - ORDER[b.status] || (ATTENTION.includes(a.status) ? a.statusSince - b.statusSince : a.startedAt - b.startedAt));
     const out: Group[] = this.projects.map(p => ({ project: p, sessions: sortS(byProject.get(p.id) ?? []) }));
     if (loose.length) out.unshift({ project: null, sessions: sortS(loose) });
     return out;
   }
+
+  /** Fronta „chce mě" podle délky čekání (Tab). */
+  queue(): Session[] { return attentionQueue(this.sessions.values()); }
 
   /** Sezení v pořadí panelu (klávesy 1–9). */
   sorted(): Session[] {
@@ -185,7 +189,7 @@ export class Panel {
           <li class="session ${s.status} ${this.sel?.kind === 'session' && this.sel.id === s.id ? 'selected' : ''}" data-id="${esc(s.id)}" title="${esc(s.cwd)}">
             <div class="bar"></div>
             <div>
-              <div class="name"><span>${idx < 9 ? `<kbd>${idx + 1}</kbd> ` : ''}${esc(s.name)}</span>${p ? '' : `<span class="proj">${esc(s.project)}</span>`}</div>
+              <div class="name"><span>${idx < 9 ? `<kbd>${idx + 1}</kbd> ` : ''}${esc(s.title ?? s.name)}</span><span class="proj">${s.title ? esc(s.name) + (p ? '' : ' · ' + esc(s.project)) : (p ? '' : esc(s.project))}</span></div>
               <div class="detail">${esc(s.status === 'working' ? (s.lastDetail ?? s.prompt ?? 'přemýšlí…') : (s.message ?? s.lastDetail ?? s.prompt ?? ''))}</div>
             </div>
             <div>
@@ -326,6 +330,8 @@ export class Panel {
     const prace = this.projects.filter(p => p.status === 'prace').length + this.projects.filter(p => p.status === 'dotaz').length;
     const dotaz = all.filter(s => s.status === 'permission').length;
     const parts = [`<span class="working"><b>${all.length}</b> ${plural(all.length, 'sezení', 'sezení', 'sezení')}</span>`];
+    const q = attentionQueue(all);
+    if (q.length) parts.push(`<span class="${q[0].status}">nejdéle čeká <b>${esc(q[0].title ?? q[0].name)}</b> ${ago(q[0].statusSince)}</span>`);
     if (prace) parts.push(`<span class="completed"><b>${prace}</b> ${plural(prace, 'projekt', 'projekty', 'projektů')} v práci</span>`);
     if (dotaz) parts.push(`<span class="permission"><b>${dotaz}</b> ${plural(dotaz, 'dotaz', 'dotazy', 'dotazů')}</span>`);
     const err = all.filter(s => s.status === 'error').length;
@@ -396,7 +402,7 @@ export class Panel {
     const term = s.terminal.program ?? s.terminal.bundleId ?? '—';
     const proj = this.projects.find(p => p.id === s.projectId);
     return `
-      <h2><span>${esc(s.name)} <span style="color:var(--muted);font-weight:400">· ${esc(proj?.name ?? s.project)}</span></span>
+      <h2><span>${esc(s.title ?? s.name)} <span style="color:var(--muted);font-weight:400">· ${s.title ? esc(s.name) + ' · ' : ''}${esc(proj?.name ?? s.project)}</span></span>
           <span class="status ${s.status}">${LABEL[s.status]}</span></h2>
       ${s.message ? `<div class="msg ${s.status}">${esc(s.message)}</div>` : ''}
       <div class="kv">
@@ -410,7 +416,7 @@ export class Panel {
         <span>Režim</span><b>${esc(s.permissionMode ?? '—')}${s.model ? ' · ' + esc(s.model) : ''}</b>
       </div>
       <div class="actions">
-        <button class="btn" data-act="focus">⌘ Otevřít terminál</button>
+        <button class="btn" data-act="focus">${s.desktopId ? '⌘ Otevřít v aplikaci Claude' : '⌘ Otevřít terminál'}</button>
         <button class="btn" data-act="dismiss" title="Skryje z kanceláře (sezení nezastaví)">Skrýt</button>
       </div>
       <ul class="log">${[...s.events].reverse().slice(0, 12).map(e => `<li><span>${clock(e.at)}</span><span>${esc(e.event)}</span><span title="${esc(e.detail ?? '')}">${esc(e.detail ?? '')}</span></li>`).join('')}</ul>`;
