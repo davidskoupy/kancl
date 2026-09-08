@@ -5,6 +5,8 @@ import { join, extname, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store, type HookPayload } from './state.ts';
 import { focusTerminal } from './focus.ts';
+import { loadConfig } from './config.ts';
+import { Scanner } from './scanner.ts';
 import type { ServerMessage } from '../shared/types.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -15,9 +17,16 @@ const DIST = resolve(__dirname, '../dist');
 const store = new Store();
 const clients = new Set<http.ServerResponse>();
 
+const scanner = new Scanner(loadConfig(), store, projects => {
+  const msg: ServerMessage = { type: 'projects', projects };
+  const line = `data: ${JSON.stringify(msg)}\n\n`;
+  for (const res of clients) res.write(line);
+});
+
 store.listeners.add((m: ServerMessage) => {
   const line = `data: ${JSON.stringify(m)}\n\n`;
   for (const res of clients) res.write(line);
+  if (m.type === 'upsert' || m.type === 'remove') scanner.publish();
 });
 
 setInterval(() => {
@@ -94,11 +103,16 @@ const server = http.createServer(async (req, res) => {
       if (!payload.hook) payload = { hook: payload as any };
       const ev = payload.hook.hook_event_name;
       const s = store.apply(payload);
+      if (ev === 'Stop' && s?.projectId) scanner.refreshRemotes(s.projectId).catch(() => {});
       if (process.env.KANCL_DEBUG) console.log(`[hook] ${ev} ${s?.name ?? ''} ${s?.status ?? 'removed'}`);
       return json(res, 200, { ok: true });
     }
 
     // ---- API -----------------------------------------------------------
+    if (req.method === 'GET' && path === '/api/projects') {
+      return json(res, 200, { projects: scanner.projects });
+    }
+
     if (req.method === 'GET' && path === '/api/sessions') {
       return json(res, 200, { sessions: store.list(), serverStartedAt: store.serverStartedAt });
     }
@@ -111,7 +125,7 @@ const server = http.createServer(async (req, res) => {
         'Access-Control-Allow-Origin': '*',
       });
       res.write('retry: 2000\n\n');
-      const snapshot: ServerMessage = { type: 'snapshot', sessions: store.list(), projects: [], serverStartedAt: store.serverStartedAt };
+      const snapshot: ServerMessage = { type: 'snapshot', sessions: store.list(), projects: scanner.projects, serverStartedAt: store.serverStartedAt };
       res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
       clients.add(res);
       req.on('close', () => clients.delete(res));
@@ -148,6 +162,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Kancl → http://${HOST}:${PORT}`);
+  scanner.start().catch(e => console.error('[scanner]', e));
   console.log(`  hooky posílají POST http://${HOST}:${PORT}/hook`);
   if (!existsSync(join(DIST, 'index.html'))) {
     console.log('  (klient není sestavený: spusť `npm run build`, nebo `npm run dev`)');
