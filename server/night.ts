@@ -77,7 +77,8 @@ export function scheduleHuman(expr?: string, fireAt?: number): string {
     const days = spec.wday.length === 1 ? WDAY_LONG[spec.wday[0]] : spec.wday.map(w => WDAY_SHORT[w]).join(', ');
     return `${days} ${time}`;
   }
-  if (everyMonth && everyWday && spec.mday.length === 1) return `${spec.mday[0]}. v měsíci ${time}`;
+  if (everyMonth && everyWday && spec.mday.length < 31) return `${spec.mday.map(d => `${d}.`).join(', ')} v měsíci ${time}`;
+  if (spec.mon.length === 1 && everyWday && spec.mday.length < 31) return `každý rok ${spec.mday.map(d => `${d}.`).join(', ')} ${spec.mon[0]}. ${time}`;
   return expr;
 }
 

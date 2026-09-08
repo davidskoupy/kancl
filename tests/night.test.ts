@@ -23,6 +23,8 @@ test('scheduleHuman česky', () => {
   assert.equal(scheduleHuman('0 6 * * 1,3'), 'po, st 6:00');
   assert.equal(scheduleHuman('0 6 1 * *'), '1. v měsíci 6:00');
   assert.equal(scheduleHuman('*/15 * * * *'), 'každých 15 min');
+  assert.equal(scheduleHuman('0 7 1,15 * *'), '1., 15. v měsíci 7:00');
+  assert.equal(scheduleHuman('0 8 1 2 *'), 'každý rok 1. 2. 8:00');
   assert.equal(scheduleHuman(undefined, new Date(2026, 8, 10, 9, 0).getTime()), 'jednou 10. 9. 9:00');
 });
 const RUNS = `# Log

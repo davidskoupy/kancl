@@ -428,9 +428,9 @@ export function signSprite(): ObjectSprite {
 const ROBOT_BODY = ['#7f8798', '#3fb8b8', '#a08be6', '#6fa3ee', '#f5c542', '#4fd18b', '#f2544f', '#c9a27a'];
 
 /** Robot 14×18 (nohy dole). anim: sleep = zavřené oči + pomalý dech, work = blikající oči a ruce na klávesnici. */
-export function robotSprite(colorIndex: number, anim: 'sleep' | 'work' | 'off'): ObjectSprite {
-  const body = ROBOT_BODY[((colorIndex % ROBOT_BODY.length) + ROBOT_BODY.length) % ROBOT_BODY.length];
-  return memo(`robot/${body}/${anim}`, () => {
+export function robotSprite(colorIndex: number, anim: 'sleep' | 'work' | 'off', cloud = false): ObjectSprite {
+  const body = cloud ? '#bfe6ff' : ROBOT_BODY[((colorIndex % ROBOT_BODY.length) + ROBOT_BODY.length) % ROBOT_BODY.length];
+  return memo(`robot/${body}/${anim}/${cloud}`, () => {
     const frames: Texture[] = [];
     const dark = '#1b1f2e', metal = '#c7cbd8', metalD = '#8f97ab';
     const n = anim === 'off' ? 1 : anim === 'sleep' ? 2 : 3;
@@ -438,7 +438,8 @@ export function robotSprite(colorIndex: number, anim: 'sleep' | 'work' | 'off'):
       const px = new Px(14, 18);
       const bob = anim === 'sleep' && f === 1 ? 1 : 0;
       // anténa
-      px.vline(7, 0 + bob, 3, metalD); px.set(7, 0 + bob, anim === 'work' && f === 1 ? '#f5c542' : '#f2544f');
+      px.vline(7, 0 + bob, 3, metalD); px.set(7, 0 + bob, cloud ? '#ffffff' : anim === 'work' && f === 1 ? '#f5c542' : '#f2544f');
+      if (cloud) { px.hline(5, 1 + bob, 5, '#ffffff'); px.set(6, 0 + bob, '#ffffff'); px.set(8, 0 + bob, '#ffffff'); }
       // hlava
       px.rect(3, 3 + bob, 8, 6, metal); px.frame(3, 3 + bob, 8, 6, metalD);
       if (anim === 'sleep') { px.hline(4, 6 + bob, 2, dark); px.hline(8, 6 + bob, 2, dark); }

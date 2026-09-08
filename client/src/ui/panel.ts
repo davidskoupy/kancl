@@ -70,7 +70,7 @@ export class Panel {
   private toast = document.getElementById('toast')!;
   private sessions = new Map<string, Session>();
   private projects: Project[] = [];
-  private night: NightShift = { jobs: [], scannedAt: 0 };
+  private night: NightShift = { jobs: [], cloudSessions: [], scannedAt: 0 };
   private sel: Sel = null;
   private filter: 'all' | 'attention' = 'all';
   private showAllKlid = false;
@@ -258,21 +258,33 @@ export class Panel {
         <li class="job ${j.state} ${sel}" data-jid="${esc(j.id)}" title="${esc(j.description ?? '')}">
           <i class="jdot"></i>
           <div>
-            <div class="name"><span>${esc(j.name)}</span><span class="proj">${esc(j.scheduleHuman)}</span></div>
+            <div class="name"><span>${esc(j.name)}</span>${j.source === 'routine' ? '<span class="cloudtag">cloud</span>' : ''}<span class="proj">${esc(j.scheduleHuman)}</span></div>
             <div class="detail">${line}</div>
           </div>
           <div class="jstate ${j.state}">${JOB_LABEL[j.state]}</div>
         </li>${j.id === stock?.engine || (stock && j.id === 'daily-content') ? stockHtml : ''}`;
     }).join('');
     const stockOrphan = stock && !jobs.some(j => j.id === 'daily-content' || j.id === stock.engine) ? stockHtml : '';
-    return `<li class="nhead"><span>Noční směna</span><span class="muted">${jobs.length} ${plural(jobs.length, 'úloha', 'úlohy', 'úloh')}</span></li>${rows}${stockOrphan}`;
+    const n = this.night;
+    let snap = '';
+    if (n.snapshotError) snap = `<span class="snap err" title="${esc(n.snapshotError)}">cloud: chyba snímku</span>`;
+    else if (n.snapshotAt) {
+      const old = Date.now() - n.snapshotAt > 2 * 3600_000;
+      snap = `<span class="snap ${old ? 'old' : ''}" title="${old ? 'Snímek cloudu je starý, aplikace Claude asi neběžela' : 'snímek cloudu z úlohy kancl-cloud-snapshot'}">cloud ${old ? 'z ' : ''}${dayClock(n.snapshotAt)}</span>`;
+    }
+    const cloudRows = n.cloudSessions.map(c => `
+      <li class="csess ${c.status}" title="${esc(c.kind === 'cloud' ? 'cloudové sezení' : 'Remote Control')}">
+        <i class="cdot"></i><span class="cname">${esc(c.name)}</span><span class="cst">${c.status === 'working' ? 'pracuje' : c.status === 'idle' ? 'čeká' : 'offline'}${c.kind === 'remote-control' ? ' · RC' : ''}</span>
+      </li>`).join('');
+    const cloudSection = n.cloudSessions.length ? `<li class="nhead"><span>V cloudu</span><span class="muted">${n.cloudSessions.length} ${plural(n.cloudSessions.length, 'sezení', 'sezení', 'sezení')}</span></li>${cloudRows}` : '';
+    return `<li class="nhead"><span>Noční směna</span><span class="muted">${jobs.length} ${plural(jobs.length, 'úloha', 'úlohy', 'úloh')}${snap ? ' · ' + snap : ''}</span></li>${rows}${stockOrphan}${cloudSection}`;
   }
 
   private jobDetails(j: Job): string {
     const proj = this.projects.find(p => p.id === j.projectId);
     const r = j.lastResult;
     return `
-      <h2><span>${esc(j.name)} <span style="color:var(--muted);font-weight:400">· noční směna</span></span>
+      <h2><span>${esc(j.name)} <span style="color:var(--muted);font-weight:400">· ${j.source === 'routine' ? 'cloud' : 'noční směna'}</span></span>
           <span class="jstate ${j.state}">${JOB_LABEL[j.state]}</span></h2>
       ${j.description ? `<div class="msg">${esc(j.description)}</div>` : ''}
       ${r ? `<div class="msg ${r.result === 'fail' ? 'error' : r.result === 'ok' ? 'completed' : ''}"><b>${esc(r.resultText)}</b>${r.project || r.slug ? ` · ${esc([r.project, r.slug].filter(Boolean).join(' / '))}` : ''}${r.note ? `<br><span class="muted">${esc(r.note)}</span>` : ''}</div>` : ''}
@@ -281,9 +293,10 @@ export class Panel {
         <span>Poslední běh</span><b>${j.lastRunAt ? dayClock(j.lastRunAt) : '—'}</b>
         <span>Další běh</span><b>${j.nextRunAt ? dayClock(j.nextRunAt) : j.enabled ? '—' : 'vypnuto'}</b>
         <span>Projekt</span><b title="${esc(j.cwd ?? '')}">${esc(proj?.name ?? j.cwd ?? '—')}</b>
-        <span>Zdroj</span><b>${j.source === 'claude' ? 'naplánovaná úloha Claude' : 'cron-job.org'}</b>
+        <span>Zdroj</span><b>${j.source === 'claude' ? 'naplánovaná úloha Claude' : j.source === 'routine' ? `cloudová routina${j.model ? ' · ' + esc(j.model) : ''}` : 'cron-job.org'}</b>
       </div>
       <div class="actions">
+        ${j.url ? `<a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener">Otevřít na claude.ai</a>` : ''}
         ${j.filePath ? `<button class="btn" data-act="open">Otevřít SKILL.md</button>` : ''}
         ${proj ? `<button class="btn" data-act="proj">Projekt ${esc(proj.name)}</button>` : ''}
       </div>`;

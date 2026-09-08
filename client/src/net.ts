@@ -13,7 +13,7 @@ export interface ClientEvents {
 export class KanclClient {
   sessions = new Map<string, Session>();
   projects: Project[] = [];
-  night: NightShift = { jobs: [], scannedAt: 0 };
+  night: NightShift = { jobs: [], cloudSessions: [], scannedAt: 0 };
   state: ConnState = 'connecting';
   private es?: EventSource;
 
@@ -44,7 +44,7 @@ export class KanclClient {
         for (const id of [...this.sessions.keys()]) if (!seen.has(id)) { this.sessions.delete(id); this.events.onRemove(id); }
         this.projects = msg.projects ?? [];
         this.events.onProjects(this.projects);
-        this.night = msg.night ?? { jobs: [], scannedAt: 0 };
+        this.night = msg.night ?? { jobs: [], cloudSessions: [], scannedAt: 0 };
         this.events.onNight(this.night);
         break;
       }
@@ -170,8 +170,16 @@ export class KanclClient {
         job('sberne-dvory-tydeni-vlna', '0 6 * * 1', 'pondělí 6:00', 'chyba', { description: 'Týdenní vlna sběrných dvorů', lastRunAt: Date.now() - 50 * 60_000, lastResult: { at: todayAt(0), result: 'fail', resultText: '⚠️ validace selhala', note: 'YAML validace: 2 obce bez souřadnic.' } }),
         job('kayla-mrtva-kopie-smazat', '', 'jednou 10. 9. 9:00', 'spi', { description: 'Karanténní kontrola mrtvé kopie', fireAt: todayAt(9) + 2 * 86_400_000, nextRunAt: todayAt(9) + 2 * 86_400_000 }),
         job('kontrola-zrani-behu-vps', '', 'jednou 3. 9. 6:15', 'vypnuto', { enabled: false, description: 'Jednorázová kontrola ranního syncu na VPS', lastRunAt: Date.now() - 5 * 86_400_000 }),
+        { ...job('routine:a', '0 14 * * 5', 'pátek 16:00', 'ok', { description: 'cloudová routina · claude-opus-4-8', lastRunAt: Date.now() - 40 * 60_000, nextRunAt: todayAt(16) + 3 * 86_400_000, lastResult: { at: Date.now() - 40 * 60_000, result: 'ok', resultText: '✅ uspělo (113 s)' } }), source: 'routine', name: 'Páteční revize vláken', url: 'https://claude.ai/code/routines/a', model: 'claude-opus-4-8' },
+        { ...job('routine:b', '0 7 1,15 * *', '1., 15. v měsíci 9:00', 'spi', { description: 'cloudová routina · claude-opus-5', lastRunAt: Date.now() - 5 * 86_400_000, nextRunAt: todayAt(9) + 7 * 86_400_000 }), source: 'routine', name: 'Kontrola místa na disku (Mac)', url: 'https://claude.ai/code/routines/b', model: 'claude-opus-5' },
       ],
       stock: { engine: 'content-engine', at: todayAt(0), items: [{ project: 'deky', pending: 28, alarm: false }, { project: 'katalogodpadu', pending: 33, alarm: false }, { project: 'baliky', pending: 15, alarm: false }, { project: 'zahradni-domky', pending: 3, alarm: true }] },
+      cloudSessions: [
+        { id: 'c1', name: 'ROZPISIO — business analytika', kind: 'cloud', status: 'idle' },
+        { id: 'c2', name: 'UX/UI audit konkurenčních webů', kind: 'cloud', status: 'working' },
+        { id: 'c3', name: 'Dispatch background conversation', kind: 'remote-control', status: 'idle' },
+      ],
+      snapshotAt: Date.now() - 25 * 60_000,
       scannedAt: Date.now(),
     };
     this.events.onNight(this.night);

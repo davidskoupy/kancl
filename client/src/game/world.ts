@@ -3,9 +3,9 @@ import type { TileKind } from './office.ts';
 
 export const TILE = 16;
 export const COLS = 30;
-export const ROWS = 21;            // 18 řádků kanceláře + 3 řádky noční směny
+export const ROWS = 22;            // 18 řádků kanceláře + 4 řádky noční směny
 export const W = COLS * TILE; // 480
-export const H = ROWS * TILE; // 336
+export const H = ROWS * TILE; // 352
 
 export interface Pt { x: number; y: number }
 
@@ -29,15 +29,18 @@ export interface Slot {
 export interface Zone { id: ZoneId; slots: Slot[] }
 
 export const SPINE_X = 184;
-export const SPAWN: Pt = { x: SPINE_X, y: 350 };
-export const EXIT: Pt = { x: SPINE_X, y: 354 };
-const ENTRANCE_SPINE: Pt = { x: SPINE_X, y: 324 };
+export const SPAWN: Pt = { x: SPINE_X, y: 366 };
+export const EXIT: Pt = { x: SPINE_X, y: 370 };
+const ENTRANCE_SPINE: Pt = { x: SPINE_X, y: 340 };
 
 // ---- noční směna (serverovna) ----------------------------------------------
-export const NIGHT = { x: 12 * TILE, y: 18 * TILE, w: 17 * TILE, h: 2 * TILE };
-export const ROBOT_MAX = 8;
-/** Pozice nohou i-tého robota v serverovně. */
-export function robotSlot(i: number): Pt { return { x: NIGHT.x + 20 + i * 32, y: NIGHT.y + 28 }; }
+export const NIGHT = { x: 12 * TILE, y: 18 * TILE, w: 17 * TILE, h: 3 * TILE };
+export const ROBOT_MAX = 16;
+/** Pozice nohou i-tého robota v serverovně: dvě řady, střídavě, s posunem o půl rozestupu. */
+export function robotSlot(i: number): Pt {
+  const row = i % 2, col = Math.floor(i / 2);
+  return { x: NIGHT.x + 20 + col * 32 + row * 16, y: NIGHT.y + 20 + row * 26 };
+}
 
 // ---- your office -----------------------------------------------------------
 export const OFFICE = { x: 16, y: 32, w: 144, h: 112, doorY: 88, lane: 140 };
@@ -172,7 +175,7 @@ export function groundMap(): TileKind[][] {
       if (c === 10) k = 'glass';                   // glass partition
       if (c === 10 && (r === 5 || r === 13)) k = 'doorway';
       if (inRect(1, 9, 9, 1)) k = 'wallH';         // wall between office and kitchen
-      if (r >= 18 && r <= 19 && c >= 12 && c <= COLS - 2) k = 'server';  // noční směna
+      if (r >= 18 && r <= 20 && c >= 12 && c <= COLS - 2) k = 'server';  // noční směna
       if (r === 0) k = 'wallTop';
       if (r === 1) k = 'wallBottom';
       if (c === 0 || c === COLS - 1) k = 'wallSide';

@@ -17,7 +17,7 @@ export interface Config {
   gitIntervalSec: number;
   remoteIntervalMin: number;
   gitlabHosts: string[];
-  night: { enabled: boolean; engines: EngineConfig[] };
+  night: { enabled: boolean; engines: EngineConfig[]; cloudSnapshot: string };
 }
 
 const DEFAULTS: Config = {
@@ -28,6 +28,7 @@ const DEFAULTS: Config = {
   gitlabHosts: ['gitlab.shean.dev'],
   night: {
     enabled: true,
+    cloudSnapshot: '~/.kancl/cloud.json',
     engines: [
       { id: 'content-engine', runsFile: '~/Code/content-engine/runs.md', stateFile: '~/Code/content-engine/state.json', taskId: 'daily-content' },
       { id: 'dopner', runsFile: '~/Code/Dopner/content-runs.md', taskId: 'dopner-tydenni-clanek', columns: { slug: 1, result: 2, note: 4 } },

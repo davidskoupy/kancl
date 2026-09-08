@@ -68,7 +68,7 @@ export interface Project {
 export interface Subagent { id: string; description: string; startedAt: number }
 
 // ---- noční směna -----------------------------------------------------------
-export type JobSource = 'claude' | 'cronjob';
+export type JobSource = 'claude' | 'routine' | 'cronjob';
 export type JobState = 'spi' | 'bezi' | 'ok' | 'chyba' | 'vypnuto';
 
 export interface JobRun { at: number; result: 'ok' | 'fail' | 'skip'; resultText: string; project?: string; slug?: string; note?: string }
@@ -88,12 +88,23 @@ export interface Job {
   lastRunAt?: number;
   nextRunAt?: number;
   lastResult?: JobRun;
+  url?: string;            // routina: odkaz na claude.ai
+  model?: string;
   state: JobState;
 }
 
 export interface Stock { engine: string; at: number; items: { project: string; pending: number; alarm: boolean }[] }
 
-export interface NightShift { jobs: Job[]; stock?: Stock; scannedAt: number }
+export interface CloudSession { id: string; name: string; kind: 'cloud' | 'remote-control'; status: 'idle' | 'working' | 'offline'; url?: string }
+
+export interface NightShift {
+  jobs: Job[];
+  stock?: Stock;
+  cloudSessions: CloudSession[];
+  snapshotAt?: number;     // kdy vznikl ~/.kancl/cloud.json
+  snapshotError?: string;
+  scannedAt: number;
+}
 
 export interface SessionEvent {
   at: number;

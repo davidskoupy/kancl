@@ -10,6 +10,7 @@ import { expandHome } from './config.ts';
 import { deriveJobState, nextRun, parseRunsMd, parseStock, readFrontmatter, scheduleHuman, type RunRow } from './night.ts';
 import type { Store } from './state.ts';
 import type { Job, NightShift, Stock } from '../shared/types.ts';
+import { parseCloudSnapshot } from './cloud.ts';
 
 const SESSIONS_DIR = join(homedir(), 'Library', 'Application Support', 'Claude', 'claude-code-sessions');
 const STALE = 7 * 24 * 3600_000;
@@ -39,7 +40,7 @@ function ms(v?: string | number): number | undefined {
 }
 
 export class NightScanner {
-  night: NightShift = { jobs: [], scannedAt: 0 };
+  night: NightShift = { jobs: [], cloudSessions: [], scannedAt: 0 };
   private lastJson = '';
   private timer?: NodeJS.Timeout;
 
@@ -141,8 +142,12 @@ export class NightScanner {
       // jednorázová úloha, která už proběhla a je vypnutá = hotovo (šedě), ne „spí"
       if (!j.enabled && j.state === 'spi') j.state = 'vypnuto';
     }
-    jobs.sort((a, b) => (b.lastRunAt ?? 0) - (a.lastRunAt ?? 0) || (a.nextRunAt ?? Infinity) - (b.nextRunAt ?? Infinity));
-    const night: NightShift = { jobs, stock, scannedAt: now };
+    // cloud přes most: snímek z naplánované úlohy kancl-cloud-snapshot
+    const cloud = parseCloudSnapshot(await readText(expandHome(this.cfg.night.cloudSnapshot)), now);
+    jobs.push(...cloud.jobs);
+    const rank = (j: Job) => (j.state === 'bezi' ? 0 : j.state === 'chyba' ? 1 : j.state === 'vypnuto' ? 3 : 2);
+    jobs.sort((a, b) => rank(a) - rank(b) || (b.lastRunAt ?? 0) - (a.lastRunAt ?? 0) || (a.nextRunAt ?? Infinity) - (b.nextRunAt ?? Infinity));
+    const night: NightShift = { jobs, stock, cloudSessions: cloud.sessions, snapshotAt: cloud.takenAt, snapshotError: cloud.error, scannedAt: now };
     const json = JSON.stringify({ ...night, scannedAt: 0 });
     if (json === this.lastJson) return;
     this.lastJson = json;

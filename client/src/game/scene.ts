@@ -21,6 +21,8 @@ function shortSchedule(job: Job): string {
   const w = h.match(/^(pondělí|úterý|středa|čtvrtek|pátek|sobota|neděle) (\S+)/);
   if (w) return `${({ pondělí: 'PO', úterý: 'UT', středa: 'ST', čtvrtek: 'CT', pátek: 'PA', sobota: 'SO', neděle: 'NE' } as Record<string, string>)[w[1]]} ${w[2]}`;
   const o = h.match(/^jednou (\d+)\. (\d+)\./); if (o) return `${o[1]}.${o[2]}.`;
+  const mm = h.match(/^([\d., ]+) v měsíci (\S+)/); if (mm) return mm[1].replace(/[ ]/g, '');
+  const yr = h.match(/^každý rok ([\d.]+) (\d+)\./); if (yr) return `${yr[1]}${yr[2]}.`;
   const k = h.match(/^každých (\d+) min/); if (k) return `/${k[1]}M`;
   return h.slice(0, 8);
 }
@@ -32,7 +34,7 @@ export interface SceneEvents {
   onJob: (id: string) => void;
 }
 
-interface RobotView { root: Container; body: Sprite; anim: AnimatedObject; bubble: Sprite; clock: Sprite; state: Job['state']; label: string }
+interface RobotView { root: Container; body: Sprite; anim: AnimatedObject; bubble: Sprite; clock: Sprite; state: Job['state']; label: string; cloud: boolean }
 
 export class Scene {
   app = new Application();
@@ -112,6 +114,7 @@ export class Scene {
     drawText(px, 20, 134, 'TVUJ KANCL', 'rgba(0,0,0,0.25)');
     drawText(px, 20, 262, 'KUCHYNKA', 'rgba(0,0,0,0.2)');
     drawText(px, NIGHT.x + 4, NIGHT.y - 10, 'NOCNI SMENA', 'rgba(63,184,184,0.7)');
+    drawText(px, NIGHT.x + NIGHT.w - 60, NIGHT.y - 10, 'BILA = CLOUD', 'rgba(191,230,255,0.5)');
     this.ground.addChild(new Sprite(px.texture()));
   }
 
@@ -263,14 +266,15 @@ export class Scene {
         root.on('pointertap', () => this.events.onJob(job.id));
         this.robots.addChild(root);
         this.animated.push(anim);
-        v = { root, body, anim, bubble, clock, state: 'vypnuto', label: '' };
+        v = { root, body, anim, bubble, clock, state: 'vypnuto', label: '', cloud: false };
         this.robotViews.set(job.id, v);
       }
       v.root.position.set(pos.x, pos.y);
       const label = shortSchedule(job);
-      if (v.state !== job.state || v.label !== label) {
-        v.state = job.state; v.label = label;
-        const spr = robotSprite(i, job.state === 'bezi' ? 'work' : job.state === 'spi' ? 'sleep' : job.state === 'vypnuto' ? 'off' : 'work');
+      const cloud = job.source === 'routine';
+      if (v.state !== job.state || v.label !== label || v.cloud !== cloud) {
+        v.state = job.state; v.label = label; v.cloud = cloud;
+        const spr = robotSprite(i, job.state === 'bezi' ? 'work' : job.state === 'spi' ? 'sleep' : job.state === 'vypnuto' ? 'off' : 'work', job.source === 'routine');
         v.anim.frames = spr.frames; v.anim.fps = spr.fps ?? 1; v.anim.i = 0; v.body.texture = spr.frames[0];
         const kind: BubbleKind | null = job.state === 'spi' ? 'zz' : job.state === 'bezi' ? 'dots' : job.state === 'ok' ? 'check' : job.state === 'chyba' ? 'bang' : null;
         if (kind) { v.bubble.texture = bubbleTexture(kind); v.bubble.visible = true; } else v.bubble.visible = false;
