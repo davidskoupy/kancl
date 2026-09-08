@@ -1,5 +1,5 @@
 import { Scene } from './game/scene.ts';
-import { CrewClient } from './net.ts';
+import { KanclClient } from './net.ts';
 import { Panel } from './ui/panel.ts';
 import { Attention } from './ui/attention.ts';
 
@@ -8,7 +8,7 @@ async function boot() {
   const stage = document.getElementById('stage')!;
 
   let scene: Scene;
-  let client: CrewClient;
+  let client: KanclClient;
 
   const panel = new Panel({
     onSelect: id => scene.select(id),
@@ -31,21 +31,22 @@ async function boot() {
     { notify: on => attention.setNotify(on), sound: on => attention.setSound(on) },
   );
 
-  client = new CrewClient({
+  client = new KanclClient({
     onUpsert: s => { scene.upsert(s); panel.upsert(s); attention.upsert(s); },
-    onRemove: (id, reason) => { scene.remove(id); panel.remove(id); attention.remove(id); if (reason) panel.showToast(`Session ended (${reason})`); },
+    onRemove: (id, reason) => { scene.remove(id); panel.remove(id); attention.remove(id); if (reason) panel.showToast(`Sezení skončilo (${reason})`); },
     onState: st => panel.setConnection(st),
+    onProjects: p => { scene.setProjects(p); panel.setProjects(p); },
   });
 
   async function focus(id: string) {
     const s = client.sessions.get(id);
     if (!s) return;
-    panel.showToast(`Opening ${s.name}'s terminal…`);
+    panel.showToast(`Otevírám terminál ${s.name}…`);
     try {
       const r = await client.focus(id);
       panel.showToast(r);
     } catch (e) {
-      panel.showToast('Could not reach the server');
+      panel.showToast('Server neodpovídá');
     }
   }
 
@@ -76,7 +77,7 @@ async function boot() {
     }
   });
 
-  (window as any).__crew = { client, scene, panel, attention };
+  (window as any).__kancl = { client, scene, panel, attention };
 
   const params = new URLSearchParams(location.search);
   if (params.has('demo')) client.startDemo();

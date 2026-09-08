@@ -1,5 +1,5 @@
 import { Application, Container, Sprite, Texture } from 'pixi.js';
-import type { Session } from '../../../shared/types.ts';
+import type { Session, Project } from '../../../shared/types.ts';
 import { Px, labelTexture, drawText } from './pixel.ts';
 import { deskSprite, coffeeMachineSprite, plantSprite, USER_LOOK, type ObjectSprite } from './sprites.ts';
 import {
@@ -148,6 +148,8 @@ export class Scene {
     this.user.addChild(label);
     this.objects.addChild(this.user);
   }
+
+  setProjects(_projects: Project[]) { /* Task 8 */ }
 
   // ---- sessions ----------------------------------------------------------
   upsert(session: Session) {

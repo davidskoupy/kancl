@@ -1,4 +1,4 @@
-import type { Session, SessionStatus } from '../../../shared/types.ts';
+import type { Session, SessionStatus, Project } from '../../../shared/types.ts';
 
 export interface PanelEvents {
   onSelect: (id: string | null) => void;
@@ -78,6 +78,8 @@ export class Panel {
     this.conn.querySelector('.conn-text')!.textContent =
       state === 'ok' ? 'live' : state === 'demo' ? 'demo' : state === 'error' ? 'server offline' : 'connecting';
   }
+
+  setProjects(_projects: Project[]) { /* Task 9 */ }
 
   upsert(s: Session) { this.sessions.set(s.id, s); this.render(); }
   remove(id: string) { this.sessions.delete(id); if (this.selected === id) this.selected = null; this.render(); }
