@@ -28,6 +28,44 @@ export interface TerminalInfo {
   pid?: number;          // pid of the `claude` process
 }
 
+export type Host = 'github' | 'gitlab' | 'none';
+export type ProjectStatus = 'dotaz' | 'prace' | 'klid';
+
+export interface Worktree {
+  path: string;
+  label: string;
+  branch: string;
+  dirty: number;
+  ahead: number;
+  behind: number;
+  lastCommit?: { hash: string; message: string; at: number };  // at = epoch v sekundách (git %ct)
+  error?: string;
+}
+
+export interface MergeRequest {
+  number: number;
+  title: string;
+  url: string;
+  branch: string;
+  state: 'open' | 'draft' | 'approved' | 'changes_requested';
+  updatedAt: number;
+}
+
+export interface Project {
+  id: string;            // normalizovaný remote (host/cesta) nebo absolutní cesta složky
+  name: string;
+  host: Host;
+  remoteUrl?: string;
+  worktrees: Worktree[];
+  mrs: MergeRequest[];
+  mrsError?: string;
+  status: ProjectStatus; // odvozený ze sezení
+  lastActivity: number;  // ms
+  scannedAt: number;
+}
+
+export interface Subagent { id: string; description: string; startedAt: number }
+
 export interface SessionEvent {
   at: number;
   event: string;     // hook_event_name
@@ -39,7 +77,8 @@ export interface Session {
   name: string;
   colorIndex: number;
   cwd: string;
-  project: string;
+  project: string;          // název složky (basename cwd)
+  projectId?: string;       // Project.id, pokud cwd leží v naskenovaném projektu
   status: SessionStatus;
   statusSince: number;
   activity: Activity;
@@ -54,13 +93,14 @@ export interface Session {
   lastSeen: number;
   turns: number;
   toolCalls: number;
-  subagents: number;
+  subagents: Subagent[];
   transcriptPath?: string;
   events: SessionEvent[];
 }
 
 export type ServerMessage =
-  | { type: 'snapshot'; sessions: Session[]; serverStartedAt: number }
+  | { type: 'snapshot'; sessions: Session[]; projects: Project[]; serverStartedAt: number }
+  | { type: 'projects'; projects: Project[] }
   | { type: 'upsert'; session: Session }
   | { type: 'remove'; id: string; reason?: string }
   | { type: 'ping' };

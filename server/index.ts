@@ -111,7 +111,7 @@ const server = http.createServer(async (req, res) => {
         'Access-Control-Allow-Origin': '*',
       });
       res.write('retry: 2000\n\n');
-      const snapshot: ServerMessage = { type: 'snapshot', sessions: store.list(), serverStartedAt: store.serverStartedAt };
+      const snapshot: ServerMessage = { type: 'snapshot', sessions: store.list(), projects: [], serverStartedAt: store.serverStartedAt };
       res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
       clients.add(res);
       req.on('close', () => clients.delete(res));

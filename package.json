@@ -14,7 +14,7 @@
     "hooks:install": "node hook/install.mjs",
     "hooks:uninstall": "node hook/install.mjs --uninstall",
     "typecheck": "tsc -p client/tsconfig.json --noEmit && tsc -p server/tsconfig.json --noEmit",
-    "test": "node --import tsx --test tests/"
+    "test": "node --import tsx --test $(find tests -name '*.test.*')"
   },
   "dependencies": {
     "pixi.js": "^8.6.6",

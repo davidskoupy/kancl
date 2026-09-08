@@ -67,7 +67,7 @@ export function describeTool(tool: string, input: any, cwd: string): string {
     case 'Task':
       return `Agent: ${short(input.description, 50)}`;
     case 'AskUserQuestion':
-      return 'Asking you a question';
+      return 'Ptá se tě';
     default:
       return tool;
   }
@@ -77,6 +77,8 @@ export class Store {
   sessions = new Map<string, Session>();
   listeners = new Set<(m: ServerMessage) => void>();
   serverStartedAt = Date.now();
+  /** cwd → Project.id; nastavuje skener projektů. */
+  projectResolver?: (cwd: string) => string | undefined;
 
   constructor(private opts: { maxEvents?: number } = {}) {}
 
@@ -111,12 +113,14 @@ export class Store {
         project: cwd ? basename(cwd) : 'unknown',
         status: 'idle', statusSince: now, activity: 'think',
         terminal: {}, startedAt: now, lastSeen: now,
-        turns: 0, toolCalls: 0, subagents: 0, events: [],
+        turns: 0, toolCalls: 0, subagents: [], events: [],
       };
+      s.projectId = this.projectResolver?.(s.cwd);
       this.sessions.set(id, s);
     }
     if (typeof hook.cwd === 'string' && hook.cwd !== s.cwd) {
       s.cwd = hook.cwd; s.project = basename(hook.cwd);
+      s.projectId = this.projectResolver?.(s.cwd);
     }
     if (typeof hook.transcript_path === 'string') s.transcriptPath = hook.transcript_path;
     if (typeof hook.permission_mode === 'string') s.permissionMode = hook.permission_mode;
@@ -183,7 +187,7 @@ export class Store {
         s.lastTool = tool;
         s.lastDetail = describeTool(tool, hook.tool_input, s.cwd);
         if (ASK_TOOLS.has(tool)) {
-          s.message = short(hook.tool_input?.questions?.[0]?.question, 140) || 'Has a question for you';
+          s.message = short(hook.tool_input?.questions?.[0]?.question, 140) || 'Má na tebe otázku';
           this.setStatus(s, 'waiting');
         } else {
           s.activity = activityForTool(tool);
@@ -218,7 +222,7 @@ export class Store {
         const tool: string = hook.tool_name ?? '';
         s.lastTool = tool;
         s.lastDetail = describeTool(tool, hook.tool_input, s.cwd);
-        s.message = `Allow ${s.lastDetail}?`;
+        s.message = `Povolit ${s.lastDetail}?`;
         this.setStatus(s, 'permission');
         this.log(s, ev, s.lastDetail);
         break;
@@ -228,15 +232,15 @@ export class Store {
         const kind: string = hook.notification_type ?? hook.type ?? '';
         const msg = short(hook.message, 160);
         if (kind === 'permission_prompt' || /permission/i.test(msg)) {
-          s.message = msg || 'Needs your permission';
+          s.message = msg || 'Potřebuje povolení';
           this.setStatus(s, 'permission');
         } else if (kind === 'idle_prompt' || /waiting for your input/i.test(msg)) {
           if (s.status !== 'permission') {
-            s.message = msg || 'Waiting for your input';
+            s.message = msg || 'Čeká na tvou odpověď';
             this.setStatus(s, 'waiting');
           }
         } else if (kind === 'elicitation_dialog' || kind === 'agent_needs_input') {
-          s.message = msg || 'Needs your input';
+          s.message = msg || 'Potřebuje odpověď';
           this.setStatus(s, 'waiting');
         }
         this.log(s, ev, `${kind}${msg ? ': ' + msg : ''}`);
@@ -247,22 +251,28 @@ export class Store {
         s.message = short(hook.last_assistant_message, 160) || undefined;
         s.activity = 'think';
         this.setStatus(s, 'completed');
-        this.log(s, ev, s.message ?? 'Turn finished');
+        this.log(s, ev, s.message ?? 'Tah dokončen');
         break;
 
-      case 'SubagentStart':
-        s.subagents++;
+      case 'SubagentStart': {
+        const id = typeof hook.agent_id === 'string' ? hook.agent_id : `sub-${Date.now()}-${s.subagents.length}`;
+        const description = short(hook.description ?? hook.agent_type, 60) || 'subagent';
+        s.subagents.push({ id, description, startedAt: Date.now() });
         this.setStatus(s, 'working');
-        this.log(s, ev, short(hook.agent_type ?? hook.description, 60));
+        this.log(s, ev, description);
         break;
+      }
 
-      case 'SubagentStop':
-        s.subagents = Math.max(0, s.subagents - 1);
+      case 'SubagentStop': {
+        const id = typeof hook.agent_id === 'string' ? hook.agent_id : undefined;
+        const i = id ? s.subagents.findIndex(a => a.id === id) : 0;
+        if (i >= 0 && s.subagents.length) s.subagents.splice(i, 1);
         this.log(s, ev);
         break;
+      }
 
       case 'PreCompact':
-        s.lastDetail = 'Compacting context';
+        s.lastDetail = 'Zhušťuje kontext';
         this.setStatus(s, 'working');
         this.log(s, ev, hook.compact_reason ?? hook.trigger);
         break;
@@ -273,6 +283,14 @@ export class Store {
 
     this.broadcast({ type: 'upsert', session: s });
     return s;
+  }
+
+  /** Znovu přiřadí projekty všem sezením (po doskenování projektů). */
+  reassignProjects() {
+    for (const s of this.sessions.values()) {
+      const id = this.projectResolver?.(s.cwd);
+      if (id !== s.projectId) { s.projectId = id; this.broadcast({ type: 'upsert', session: s }); }
+    }
   }
 
   remove(id: string, reason = 'dismissed') {

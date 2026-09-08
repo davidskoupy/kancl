@@ -154,7 +154,7 @@ export class Panel {
         <span>Last tool</span><b title="${esc(s.lastDetail ?? '')}">${esc(s.lastDetail ?? '—')}</b>
         <span>Directory</span><b title="${esc(s.cwd)}">${esc(s.cwd)}</b>
         <span>Terminal</span><b>${esc(term)}${s.terminal.tty ? ' · ' + esc(s.terminal.tty.replace('/dev/', '')) : ''}</b>
-        <span>Turns / tools</span><b>${s.turns} / ${s.toolCalls}${s.subagents ? ` · ${s.subagents} subagent${s.subagents > 1 ? 's' : ''}` : ''}</b>
+        <span>Turns / tools</span><b>${s.turns} / ${s.toolCalls}${s.subagents.length ? ` · ${s.subagents.length} subagent${s.subagents.length > 1 ? 's' : ''}` : ''}</b>
         <span>Mode</span><b>${esc(s.permissionMode ?? '—')}${s.model ? ' · ' + esc(s.model) : ''}</b>
       </div>
       <div class="actions">

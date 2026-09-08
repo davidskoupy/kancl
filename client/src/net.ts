@@ -74,7 +74,7 @@ export class CrewClient {
       id: `demo-${i}`, name: ['Ada', 'Bit', 'Cody', 'Nova', 'Pip', 'Rex', 'Wren', 'Zed'][i], colorIndex: i,
       cwd: `/Users/you/${project}`, project, status, statusSince: now, activity,
       terminal: { program: 'Apple_Terminal' }, startedAt: now - i * 60_000, lastSeen: now,
-      turns: 1 + i, toolCalls: i * 7, subagents: 0,
+      turns: 1 + i, toolCalls: i * 7, subagents: [],
       events: [{ at: now, event: 'SessionStart', detail: 'startup' }], ...extra,
     });
     const seeds: Session[] = [
