@@ -214,8 +214,8 @@ export class Scene {
       this.islands.addChild(g);
       const hex = `#${color.toString(16).padStart(6, '0')}`;
       const label = new Sprite(labelTexture(plainAscii(names.get(isl.projectId) ?? isl.projectId).slice(0, 14), { color: hex }));
-      label.anchor.set(0, 1);
-      label.position.set(first!.x + 2, first!.y);
+      label.anchor.set(0, 0);
+      label.position.set(first!.x + 2, first!.y + 1);   // uvnitř rámečku, aby ji nezakryla zeď s okny
       label.alpha = alpha;
       this.islands.addChild(label);
     }
