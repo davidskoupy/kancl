@@ -313,6 +313,11 @@ export class Panel {
     const dirty = p.worktrees.reduce((a, w) => a + w.dirty, 0);
     if (dirty) parts.push(`<b>${dirty} ${plural(dirty, 'změna', 'změny', 'změn')}</b>`);
     if (p.mrs.length) parts.push(`${p.mrs.length} PR/MR`);
+    if (p.ci?.status === 'fail') parts.push(`<b class="ci fail">CI ✗</b>`);
+    else if (p.ci?.status === 'running') parts.push(`<span class="ci run">CI …</span>`);
+    const oldest = Math.min(...p.worktrees.map(w => w.dirtyOldest ?? Infinity));
+    if (dirty && Number.isFinite(oldest) && Date.now() - oldest > 3 * 86_400_000) parts.push(`nejstarší ${Math.floor((Date.now() - oldest) / 86_400_000)} d`);
+    if (p.worktrees.some(w => w.stale)) parts.push('<span class="stale">zastaralé worktree</span>');
     if (p.worktrees.some(w => w.error)) parts.push('<b>git neodpovídá</b>');
     return parts.join(' · ');
   }
@@ -361,6 +366,11 @@ export class Panel {
       this.details.innerHTML = this.projectDetails(p);
       this.details.querySelectorAll<HTMLElement>('[data-sid]').forEach(el => el.addEventListener('click', () => this.events.onSelect(el.dataset.sid!)));
       this.details.querySelectorAll<HTMLElement>('[data-jid]').forEach(el => el.addEventListener('click', () => this.selectJob(el.dataset.jid!)));
+      this.details.querySelectorAll<HTMLElement>('[data-rm]').forEach(el => el.addEventListener('click', e => {
+        e.stopPropagation();
+        const cmd = `git worktree remove "${el.dataset.rm}"`;
+        navigator.clipboard?.writeText(cmd).then(() => this.showToast('Příkaz je ve schránce, Kancl nic nemaže'), () => this.showToast(cmd));
+      }));
       return;
     }
     const s = this.sessions.get(this.sel.id);
@@ -376,7 +386,7 @@ export class Panel {
       <tr>
         <td title="${esc(w.path)}">${esc(w.label)}</td>
         <td>${esc(w.branch || '—')}</td>
-        <td>${w.error ? `<span class="status error">${esc(w.error)}</span>` : `${w.dirty ? `<b>${w.dirty} ${plural(w.dirty, 'změna', 'změny', 'změn')}</b>` : 'čisté'}${w.ahead ? ` ↑${w.ahead}` : ''}${w.behind ? ` ↓${w.behind}` : ''}`}</td>
+        <td>${w.error ? `<span class="status error">${esc(w.error)}</span>` : `${w.dirty ? `<b>${w.dirty} ${plural(w.dirty, 'změna', 'změny', 'změn')}</b>${w.dirtyOldest && Date.now() - w.dirtyOldest > 86_400_000 ? ` <span class="muted">(${Math.floor((Date.now() - w.dirtyOldest) / 86_400_000)} d)</span>` : ''}` : 'čisté'}${w.ahead ? ` ↑${w.ahead}` : ''}${w.behind ? ` ↓${w.behind}` : ''}${w.stale ? ` <span class="stale" title="větev je sloučená a worktree se 14 dní nehnul">zastaralé</span> <button class="btn xs" data-rm="${esc(w.path)}" title="zkopíruje příkaz do schránky">kopírovat git worktree remove</button>` : w.merged && p.worktrees.length > 1 ? ' <span class="muted">sloučené</span>' : ''}`}</td>
         <td title="${esc(w.lastCommit?.message ?? '')}">${w.lastCommit ? `${esc(w.lastCommit.hash)} ${esc(w.lastCommit.message)} · <span data-since="${w.lastCommit.at * 1000}">${ago(w.lastCommit.at * 1000)}</span>` : ''}</td>
       </tr>`;
     const mr = (m: MergeRequest) => `
@@ -391,6 +401,7 @@ export class Panel {
       <h2><span>${esc(p.name)} <span style="color:var(--muted);font-weight:400">· ${HOST_LABEL[p.host]}</span></span>
           <span class="status ${p.status === 'dotaz' ? 'permission' : p.status === 'prace' ? 'working' : 'idle'}">${p.status === 'prace' ? 'práce' : p.status}</span></h2>
       ${p.mrsError ? `<div class="msg error">PR/MR nedostupné: ${esc(p.mrsError)}</div>` : ''}
+      ${p.ci && p.ci.status !== 'none' ? `<div class="label">GitHub Actions</div><ul class="mrs">${p.ci.runs.map(r => `<li class="mr"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a> <span class="status ${r.status === 'ok' ? 'completed' : r.status === 'fail' ? 'error' : 'working'}">${r.status === 'ok' ? 'prošel' : r.status === 'fail' ? 'selhal' : 'běží'}</span> <span class="muted" title="${esc(r.title ?? '')}">${dayClock(r.at)}${r.title ? ' · ' + esc(r.title) : ''}</span></li>`).join('')}</ul>` : ''}
       <div class="tbl"><table>${p.worktrees.map(wt).join('')}</table></div>
       ${p.mrs.length ? `<div class="label">${p.host === 'gitlab' ? 'Merge requesty' : 'Pull requesty'}</div><ul class="mrs">${p.mrs.map(mr).join('')}</ul>` : p.host !== 'none' && !p.mrsError ? `<div class="muted">žádné otevřené PR/MR</div>` : ''}
       ${sess ? `<div class="label">Sezení</div><ul class="mrs">${sess}</ul>` : ''}

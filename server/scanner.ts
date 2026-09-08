@@ -6,7 +6,7 @@ import type { Config } from './config.ts';
 import { expandHome, gitlabToken } from './config.ts';
 import { groupFolders, fillStatus, sortProjects, projectIdForCwd, type FolderInfo } from './projects.ts';
 import type { Store } from './state.ts';
-import type { MergeRequest, Project, Worktree } from '../shared/types.ts';
+import type { CiRun, CiState, MergeRequest, Project, Worktree } from '../shared/types.ts';
 
 const run = promisify(execFile);
 const GIT_TIMEOUT = 3000;
@@ -40,10 +40,27 @@ async function readWorktree(w: Worktree): Promise<Worktree> {
       behind = b || 0; ahead = a || 0;
     } catch { /* bez upstreamu */ }
     const [hash, message, ct] = log.split('\x1f');
+    // stáří nejstarší změny (max 50 souborů, aby to bylo levné)
+    let dirtyOldest: number | undefined;
+    const dirtyFiles = status ? status.split('\n').slice(0, 50).map(l => l.slice(3).replace(/^.* -> /, '').replace(/^"|"$/g, '')) : [];
+    for (const f of dirtyFiles) {
+      try { const m = (await stat(join(w.path, f))).mtimeMs; if (dirtyOldest === undefined || m < dirtyOldest) dirtyOldest = m; } catch { /* smazaný soubor */ }
+    }
+    // sloučení do hlavní větve
+    let merged: boolean | undefined;
+    try {
+      const main = await git(w.path, ['rev-parse', '--abbrev-ref', 'origin/HEAD']).catch(() => '');
+      const ref = main || (await git(w.path, ['rev-parse', '--verify', '--quiet', 'origin/main']).then(() => 'origin/main').catch(() => 'origin/master'));
+      if (branch !== 'HEAD' && ref.replace(/^origin\//, '') !== branch) {
+        await git(w.path, ['merge-base', '--is-ancestor', 'HEAD', ref]);
+        merged = true;
+      } else merged = false;
+    } catch { merged = false; }
     return {
       ...w, branch: branch === 'HEAD' ? '(detached)' : branch,
       dirty: status ? status.split('\n').length : 0, ahead, behind,
       lastCommit: hash ? { hash: hash.slice(0, 7), message, at: Number(ct) } : undefined,
+      dirtyOldest, merged, stale: false,
       error: undefined,
     };
   } catch (e: any) {
@@ -60,6 +77,17 @@ async function githubPrs(id: string): Promise<MergeRequest[]> {
     state: p.isDraft ? 'draft' : p.reviewDecision === 'APPROVED' ? 'approved' : p.reviewDecision === 'CHANGES_REQUESTED' ? 'changes_requested' : 'open',
     updatedAt: Date.parse(p.updatedAt),
   }));
+}
+
+async function githubRuns(id: string): Promise<CiState> {
+  const repo = id.replace(/^github\.com\//, '');
+  const { stdout } = await run('gh', ['run', 'list', '--repo', repo, '--limit', '3', '--json', 'name,status,conclusion,createdAt,url,displayTitle,workflowName'], { timeout: 15000 });
+  const runs: CiRun[] = (JSON.parse(stdout) as any[]).map(r => ({
+    name: r.workflowName || r.name, title: r.displayTitle, url: r.url, at: Date.parse(r.createdAt),
+    status: r.status !== 'completed' ? 'running' : r.conclusion === 'success' || r.conclusion === 'skipped' || r.conclusion === 'neutral' ? 'ok' : 'fail',
+  }));
+  const top = runs[0];
+  return top ? { status: top.status, name: top.name, at: top.at, url: top.url, runs } : { status: 'none', runs: [] };
 }
 
 async function gitlabMrs(id: string, token: string): Promise<MergeRequest[]> {
@@ -136,7 +164,7 @@ export class Scanner {
       const prev = old.get(p.id);
       if (!prev) return p;
       const wt = new Map(prev.worktrees.map(w => [w.path, w]));
-      return { ...p, mrs: prev.mrs, mrsError: prev.mrsError, worktrees: p.worktrees.map(w => wt.get(w.path) ?? w) };
+      return { ...p, mrs: prev.mrs, mrsError: prev.mrsError, ci: prev.ci, worktrees: p.worktrees.map(w => wt.get(w.path) ?? w) };
     });
     this.store.reassignProjects();
     this.publish();
@@ -146,7 +174,14 @@ export class Scanner {
     const all = this.raw.filter(p => !!p.remoteUrl).flatMap(p => p.worktrees);
     const updated = await mapLimit(all, 4, readWorktree);
     const byPath = new Map(updated.map(w => [w.path, w]));
-    this.raw = this.raw.map(p => ({ ...p, worktrees: p.worktrees.map(w => byPath.get(w.path) ?? w), scannedAt: Date.now() }));
+    const STALE_DAYS = 14;
+    this.raw = this.raw.map(p => {
+      const worktrees = p.worktrees.map(w => byPath.get(w.path) ?? w).map(w => ({
+        ...w,
+        stale: !!w.merged && p.worktrees.length > 1 && !!w.lastCommit && Date.now() - w.lastCommit.at * 1000 > STALE_DAYS * 86_400_000 && w.dirty === 0,
+      }));
+      return { ...p, worktrees, scannedAt: Date.now() };
+    });
     this.publish();
   }
 
@@ -164,9 +199,9 @@ export class Scanner {
   private async fetchRemote(id: string) {
     const p = this.raw.find(x => x.id === id);
     if (!p || p.host === 'none') return;
-    let mrs = p.mrs, mrsError: string | undefined;
+    let mrs = p.mrs, mrsError: string | undefined, ci = p.ci;
     try {
-      if (p.host === 'github') mrs = await githubPrs(id);
+      if (p.host === 'github') { mrs = await githubPrs(id); ci = await githubRuns(id).catch(() => ci); }
       else {
         const token = gitlabToken();
         if (!token) throw new Error('chybí GITLAB_TOKEN');
@@ -176,6 +211,6 @@ export class Scanner {
       const msg = String(e?.message ?? e);
       mrsError = /ENOENT/.test(msg) ? 'gh není nainstalované' : /auth|login|401/i.test(msg) ? 'gh není přihlášené / token neplatí' : msg.split('\n')[0].slice(0, 120);
     }
-    this.raw = this.raw.map(x => (x.id === id ? { ...x, mrs, mrsError } : x));
+    this.raw = this.raw.map(x => (x.id === id ? { ...x, mrs, mrsError, ci } : x));
   }
 }

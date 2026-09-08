@@ -189,3 +189,8 @@ body.mini #app { display: none; }
 .mfoot.err b { color: var(--error); }
 .mfoot .old { color: var(--permission); }
 .session .name .proj { max-width: 120px; }
+
+/* ---- zdraví ---- */
+.ci.fail { color: var(--error); } .ci.run { color: var(--working); }
+.stale { color: var(--permission); }
+.btn.xs { padding: 1px 6px; font-size: 10px; margin-left: 4px; }

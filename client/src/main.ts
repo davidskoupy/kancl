@@ -18,6 +18,7 @@ async function bootMini() {
     onNight: n => mini.setNight(n),
   });
   const attention = new Attention({ onOpen: id => client.focus(id) });
+  client.events.onNight = n => { mini.setNight(n); attention.setNight(n); };
   client.events.onUpsert = s => { mini.upsert(s); attention.upsert(s); };
   client.events.onRemove = id => { mini.remove(id); attention.remove(id); };
   const params = new URLSearchParams(location.search);
@@ -60,7 +61,7 @@ async function boot() {
     onRemove: (id, reason) => { scene.remove(id); panel.remove(id); attention.remove(id); if (reason) panel.showToast(`Sezení skončilo (${reason})`); },
     onState: st => panel.setConnection(st),
     onProjects: p => { scene.setProjects(p); panel.setProjects(p); },
-    onNight: n => { scene.setNight(n); panel.setNight(n); },
+    onNight: n => { scene.setNight(n); panel.setNight(n); attention.setNight(n); },
   });
 
   async function focus(id: string) {

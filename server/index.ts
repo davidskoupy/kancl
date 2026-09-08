@@ -10,6 +10,8 @@ import { loadConfig } from './config.ts';
 import { Scanner } from './scanner.ts';
 import { NightScanner } from './nightScanner.ts';
 import { DesktopIndex } from './desktop.ts';
+import { History, digest as buildDigest } from './history.ts';
+import { expandHome } from './config.ts';
 import type { ServerMessage } from '../shared/types.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -27,12 +29,35 @@ const night = new NightScanner(config, store, n => {
   const msg: ServerMessage = { type: 'night', night: n };
   const line = `data: ${JSON.stringify(msg)}\n\n`;
   for (const res of clients) res.write(line);
+  for (const j of n.jobs) {
+    if ((j.state === 'ok' || j.state === 'chyba') && j.lastRunAt) {
+      const r = j.lastResult;
+      const what = r ? `${r.project ? r.project + ' ' : ''}${r.resultText}${r.slug ? ' ' + r.slug : ''}` : j.state === 'ok' ? 'proběhlo' : 'selhalo';
+      history.add({ at: j.lastRunAt, kind: j.state === 'ok' ? 'job_ok' : 'job_fail', title: `${j.name} · ${what}`.slice(0, 160), ref: `${j.id}:${j.lastRunAt}`, detail: r?.note?.slice(0, 200) }).catch(() => {});
+    }
+  }
+  if (n.stock?.items.some(i => i.alarm)) {
+    history.add({ at: n.stock.at, kind: 'stock_alarm', title: `zásoba témat: ${n.stock.items.filter(i => i.alarm).map(i => `${i.project} ${i.pending}`).join(', ')}`, ref: String(n.stock.at) }).catch(() => {});
+  }
 });
+const history = new History(expandHome('~/.kancl/history.jsonl'));
 const scanner = new Scanner(config, store, projects => {
   const msg: ServerMessage = { type: 'projects', projects };
   const line = `data: ${JSON.stringify(msg)}\n\n`;
   for (const res of clients) res.write(line);
+  for (const p of projects) {
+    if (p.ci?.status === 'fail' && p.ci.at) {
+      history.add({ at: p.ci.at, kind: 'ci_fail', title: `${p.name} · ${p.ci.name ?? 'workflow'} selhal`, project: p.name, ref: `${p.id}:${p.ci.at}`, detail: p.ci.url }).catch(() => {});
+    }
+  }
 });
+store.onSessionEnd = (s, reason) => {
+  const mins = Math.round((Date.now() - s.startedAt) / 60_000);
+  history.add({
+    at: Date.now(), kind: 'session_end', title: s.title ?? s.name, project: s.project, ref: s.id,
+    detail: `${s.name} · ${s.turns} ${s.turns === 1 ? 'tah' : s.turns < 5 ? 'tahy' : 'tahů'} · ${s.toolCalls} nástrojů · ${mins} min${reason ? ' · ' + reason : ''}${s.message ? ' · ' + s.message.slice(0, 120) : ''}`,
+  }).catch(() => {});
+};
 
 store.listeners.add((m: ServerMessage) => {
   const line = `data: ${JSON.stringify(m)}\n\n`;
@@ -133,6 +158,21 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
+    if (req.method === 'GET' && path === '/api/history') {
+      const from = Number(url.searchParams.get('since') ?? 0) || 0;
+      return json(res, 200, { events: history.events.filter(e => e.at >= from).sort((a, b) => a.at - b.at) });
+    }
+
+    if (req.method === 'GET' && path === '/api/digest') {
+      const to = Number(url.searchParams.get('to') ?? Date.now()) || Date.now();
+      const yesterday18 = (() => { const d = new Date(to); d.setDate(d.getDate() - 1); d.setHours(18, 0, 0, 0); return d.getTime(); })();
+      const from = Number(url.searchParams.get('since') ?? yesterday18) || yesterday18;
+      const d = buildDigest(history.events, from, to);
+      const waiting = store.list().filter(s => s.status === 'permission' || s.status === 'waiting' || s.status === 'error').map(s => ({ id: s.id, name: s.title ?? s.name, status: s.status, since: s.statusSince, project: s.project, message: s.message }));
+      const ci = scanner.projects.filter(p => p.ci?.status === 'fail').map(p => ({ project: p.name, name: p.ci!.name, at: p.ci!.at, url: p.ci!.url }));
+      return json(res, 200, { ...d, waitingNow: waiting, ciFailingNow: ci, stock: night.night.stock, snapshotAt: night.night.snapshotAt });
+    }
+
     if (req.method === 'GET' && path === '/api/night') {
       return json(res, 200, { night: night.night });
     }
@@ -190,6 +230,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Kancl → http://${HOST}:${PORT}`);
+  history.load().catch(e => console.error('[history]', e));
   desktop.start().catch(e => console.error('[desktop]', e));
   scanner.start().then(() => night.start()).catch(e => console.error('[scanner]', e));
   console.log(`  hooky posílají POST http://${HOST}:${PORT}/hook`);

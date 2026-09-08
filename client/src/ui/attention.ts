@@ -1,4 +1,4 @@
-import type { Session, SessionStatus } from '../../../shared/types.ts';
+import type { Session, SessionStatus, NightShift } from '../../../shared/types.ts';
 import { renderPose, lookFor, type Pose } from '../game/sprites.ts';
 
 /**
@@ -160,10 +160,10 @@ export class Attention {
     if (this.sound && (s.status === 'permission' || s.status === 'error')) this.beep(s.status);
     if (!this.notify || !('Notification' in window) || Notification.permission !== 'granted') return;
     const titles: Record<string, string> = {
-      permission: `${s.name} potřebuje povolení`,
-      error: `${s.name} narazil na chybu`,
-      waiting: `${s.name} čeká na odpověď`,
-      completed: `${s.name} má hotovo`,
+      permission: `${s.title ?? s.name} potřebuje povolení`,
+      error: `${s.title ?? s.name} narazil na chybu`,
+      waiting: `${s.title ?? s.name} čeká na odpověď`,
+      completed: `${s.title ?? s.name} má hotovo`,
     };
     const n = new Notification(titles[s.status], {
       body: `${s.project}${s.message ? ' — ' + short(s.message, 120) : ''}`,
@@ -171,6 +171,36 @@ export class Attention {
       silent: true,
     });
     n.onclick = () => { window.focus(); this.events.onOpen(s.id); n.close(); };
+  }
+
+  // ---- noční směna: chyba úlohy, starý snímek cloudu, alarm zásoby ------
+  private nightSeen = new Set<string>();
+  private snapWarned = false;
+  setNight(n: NightShift) {
+    for (const j of n.jobs) {
+      if (j.state !== 'chyba' || !j.lastRunAt) continue;
+      const key = `job:${j.id}:${j.lastRunAt}`;
+      if (this.nightSeen.has(key)) continue;
+      this.nightSeen.add(key);
+      this.alertNight(`Noční směna: ${j.name} selhala`, j.lastResult?.resultText ?? 'úloha skončila chybou', key, true);
+    }
+    const old = !!n.snapshotAt && Date.now() - n.snapshotAt > 2 * 3600_000;
+    if (old && !this.snapWarned) { this.snapWarned = true; this.alertNight('Snímek cloudu je starý', 'Aplikace Claude asi neběžela, úloha kancl-cloud-snapshot se nespustila.', 'snap', false); }
+    if (!old) this.snapWarned = false;
+    if (n.stock?.items.some(i => i.alarm)) {
+      const key = `stock:${n.stock.at}`;
+      if (!this.nightSeen.has(key)) {
+        this.nightSeen.add(key);
+        this.alertNight('Dochází témata', n.stock.items.filter(i => i.alarm).map(i => `${i.project}: ${i.pending}`).join(', ') + ' — doplň content-plan.md', key, false);
+      }
+    }
+  }
+
+  private alertNight(title: string, body: string, tag: string, sound: boolean) {
+    if (sound && this.sound) this.beep('error');
+    if (!this.notify || !('Notification' in window) || Notification.permission !== 'granted') return;
+    const n = new Notification(title, { body: short(body, 140), tag: `kancl-night-${tag}`, silent: true });
+    n.onclick = () => { window.focus(); n.close(); };
   }
 
   private beep(kind: 'permission' | 'error') {

@@ -39,6 +39,9 @@ export interface Worktree {
   ahead: number;
   behind: number;
   lastCommit?: { hash: string; message: string; at: number };  // at = epoch v sekundách (git %ct)
+  dirtyOldest?: number;  // ms, mtime nejstarší necommitnuté změny
+  merged?: boolean;      // HEAD je obsažený v hlavní větvi
+  stale?: boolean;       // sloučené, > 14 dní bez commitu, projekt má víc worktree
   error?: string;
 }
 
@@ -51,6 +54,9 @@ export interface MergeRequest {
   updatedAt: number;
 }
 
+export interface CiRun { name: string; title?: string; status: 'ok' | 'fail' | 'running'; at: number; url: string }
+export interface CiState { status: 'ok' | 'fail' | 'running' | 'none'; name?: string; at?: number; url?: string; runs: CiRun[] }
+
 export interface Project {
   id: string;            // normalizovaný remote (host/cesta) nebo absolutní cesta složky
   name: string;
@@ -59,6 +65,7 @@ export interface Project {
   worktrees: Worktree[];
   mrs: MergeRequest[];
   mrsError?: string;
+  ci?: CiState;          // GitHub Actions: poslední běhy (jen čtení)
   status: ProjectStatus; // odvozený ze sezení
   lastActivity: number;  // ms
   activeSince?: number;  // ms, start nejstaršího běžícího sezení (stabilní pořadí aktivních)

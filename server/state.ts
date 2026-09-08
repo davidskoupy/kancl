@@ -81,6 +81,8 @@ export class Store {
   projectResolver?: (cwd: string) => string | undefined;
   /** CLI session id → název a id sezení v desktopové aplikaci. */
   desktopResolver?: (cliSessionId: string) => { desktopId: string; title?: string } | undefined;
+  /** Volá se před odstraněním sezení (historie). */
+  onSessionEnd?: (s: Session, reason?: string) => void;
 
   constructor(private opts: { maxEvents?: number } = {}) {}
 
@@ -160,6 +162,7 @@ export class Store {
     if (ev === 'SessionEnd') {
       const existing = this.sessions.get(id);
       if (existing) {
+        this.onSessionEnd?.(existing, hook.end_reason ?? hook.reason);
         this.sessions.delete(id);
         this.broadcast({ type: 'remove', id, reason: hook.end_reason ?? hook.reason });
       }
@@ -329,6 +332,7 @@ export class Store {
         this.setStatus(s, 'working'); changed = true;
       }
       if (s.terminal.pid && now - s.lastSeen > 15_000 && !isAlive(s.terminal.pid)) {
+        this.onSessionEnd?.(s, 'process exited');
         this.sessions.delete(s.id);
         this.broadcast({ type: 'remove', id: s.id, reason: 'process exited' });
         continue;

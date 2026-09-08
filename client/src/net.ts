@@ -117,11 +117,13 @@ export class KanclClient {
       proj('github.com/ty/eshop', 'eshop', 'github', {
         worktrees: [{ path: '/Users/ty/Code/eshop', label: 'eshop', branch: 'feat/kosik', dirty: 4, ahead: 2, behind: 0, lastCommit: { hash: 'e1f2a3b', message: 'košík: zaokrouhlení', at: Math.floor(now / 1000) - 600 } }],
         mrs: [{ number: 31, title: 'Zaokrouhlení v košíku', url: '#', branch: 'feat/kosik', state: 'open', updatedAt: now }],
+        ci: { status: 'fail', name: 'Build & Deploy', at: now - 3600_000, url: '#', runs: [{ name: 'Build & Deploy', title: 'content: add blog', status: 'fail', at: now - 3600_000, url: '#' }, { name: 'Build & Deploy', status: 'ok', at: now - 5 * 86_400_000, url: '#' }] },
       }),
       proj('gitlab.shean.dev/others/brana', 'api-brana', 'gitlab', {
         worktrees: [
           { path: '/Users/ty/Code/brana', label: 'brana', branch: '1165', dirty: 0, ahead: 0, behind: 3, lastCommit: { hash: '9c0d1e2', message: 'obdobi: filtr', at: Math.floor(now / 1000) - 7200 } },
-          { path: '/Users/ty/Code/brana-bugs', label: 'brana-bugs', branch: 'bugs', dirty: 1, ahead: 0, behind: 0 },
+          { path: '/Users/ty/Code/brana-bugs', label: 'brana-bugs', branch: 'bugs', dirty: 1, ahead: 0, behind: 0, dirtyOldest: now - 9 * 86_400_000 },
+          { path: '/Users/ty/Code/brana-1075', label: 'brana-1075', branch: 'feat/1075', dirty: 0, ahead: 0, behind: 0, merged: true, stale: true, lastCommit: { hash: '1a2b3c4', message: 'sloupec projektu', at: Math.floor(now / 1000) - 21 * 86_400 } },
         ],
         mrs: [{ number: 212, title: 'PnL za období', url: '#', branch: '1165', state: 'approved', updatedAt: now }],
       }),
