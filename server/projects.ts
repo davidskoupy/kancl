@@ -87,7 +87,7 @@ export function matchGlob(value: string, glob: string): boolean {
 
 export function assignGroups(projects: Project[], groups: GroupConfig[]): Project[] {
   return projects.map(p => {
-    const g = groups.find(gr => gr.match.some(m => matchGlob(p.id, m) || matchGlob(p.name, m)));
-    return { ...p, group: g?.name };
+    const i = groups.findIndex(gr => gr.match.some(m => matchGlob(p.id, m) || matchGlob(p.name, m)));
+    return { ...p, group: i >= 0 ? groups[i].name : undefined, groupIndex: i >= 0 ? i : undefined };
   });
 }

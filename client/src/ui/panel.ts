@@ -159,7 +159,12 @@ export class Panel {
     const sortS = (l: Session[]) => l.sort((a, b) => ORDER[a.status] - ORDER[b.status] || (ATTENTION.includes(a.status) ? a.statusSince - b.statusSince : a.startedAt - b.startedAt));
     const q = this.query;
     const hit = (s: Session) => !q || `${s.name} ${s.title ?? ''} ${s.project} ${s.lastDetail ?? ''}`.toLowerCase().includes(q);
-    const projects = [...this.projects].sort((a, b) => Number(this.pinned.has(b.id)) - Number(this.pinned.has(a.id)));
+    // pořadí: připnuté → v práci (dotaz/práce, pořadí ze serveru) → klidné podle skupin z configu, uvnitř pořadí ze serveru
+    const gi = (p: Project) => (p.groupIndex ?? 999);
+    const projects = [...this.projects].sort((a, b) =>
+      Number(this.pinned.has(b.id)) - Number(this.pinned.has(a.id))
+      || Number(a.status === 'klid') - Number(b.status === 'klid')
+      || (a.status === 'klid' && b.status === 'klid' ? gi(a) - gi(b) : 0));
     let out: Group[] = projects.map(p => ({ project: p, sessions: sortS((byProject.get(p.id) ?? []).filter(hit)) }));
     if (q) out = out.filter(g => g.sessions.length || `${g.project!.name} ${g.project!.id} ${g.project!.group ?? ''}`.toLowerCase().includes(q));
     const looseHit = sortS(loose.filter(hit));
@@ -195,9 +200,11 @@ export class Panel {
       const pinned = !!p && this.pinned.has(p.id);
       if (isKlid && !pinned && !this.query && !this.showAllKlid && klidShown >= KLID_VISIBLE) { klidHidden++; continue; }
       if (isKlid && !pinned) klidShown++;
-      const groupName = p ? (p.group ?? null) : '__loose__';
+      // záhlaví: „v práci" pro aktivní/připnuté, pak skupiny z configu pro klidné
+      const groupName = p ? (pinned ? '__pinned__' : !isKlid ? '__active__' : (p.group ?? null)) : '__loose__';
       if (showGroups && p && groupName !== lastGroup) {
-        html.push(`<li class="ghead">${esc(groupName ?? 'ostatní')}</li>`);
+        const label = groupName === '__pinned__' ? 'připnuté' : groupName === '__active__' ? 'v práci' : groupName ?? 'ostatní';
+        html.push(`<li class="ghead">${esc(label)}</li>`);
         lastGroup = groupName;
       }
       const id = p?.id ?? LOOSE_ID;

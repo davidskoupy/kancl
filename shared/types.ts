@@ -67,6 +67,7 @@ export interface Project {
   mrsError?: string;
   ci?: CiState;          // GitHub Actions: poslední běhy (jen čtení)
   group?: string;        // skupina z configu (Shean, Klienti, Weby…)
+  groupIndex?: number;   // pořadí skupiny v configu (nezařazené = undefined → na konec)
   status: ProjectStatus; // odvozený ze sezení
   lastActivity: number;  // ms
   activeSince?: number;  // ms, start nejstaršího běžícího sezení (stabilní pořadí aktivních)
