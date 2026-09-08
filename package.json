@@ -1,0 +1,47 @@
+{
+  "name": "comakers-crew",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Comakers Crew — a live 32x32 pixel-art monitor for your Claude Code sessions",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "tsx watch server/index.ts",
+    "dev:client": "vite --config client/vite.config.ts",
+    "build": "vite build --config client/vite.config.ts",
+    "start": "npm run build && tsx server/index.ts --open",
+    "serve": "tsx server/index.ts",
+    "hooks:install": "node hook/install.mjs",
+    "hooks:uninstall": "node hook/install.mjs --uninstall",
+    "typecheck": "tsc -p client/tsconfig.json --noEmit && tsc -p server/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "pixi.js": "^8.6.6",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11",
+    "@types/node": "^22.10.7"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rontoday/comakers-crew.git"
+  },
+  "homepage": "https://github.com/rontoday/comakers-crew#readme",
+  "keywords": [
+    "claude-code",
+    "claude",
+    "monitor",
+    "pixel-art",
+    "pixijs",
+    "hooks",
+    "agents",
+    "dashboard"
+  ]
+}

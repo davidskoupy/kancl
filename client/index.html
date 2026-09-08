@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Comakers Crew</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'><rect x='4' y='2' width='8' height='6' fill='%23f2c9a0'/><rect x='4' y='2' width='8' height='2' fill='%235b3a1e'/><rect x='6' y='5' width='1' height='1' fill='%23222'/><rect x='9' y='5' width='1' height='1' fill='%23222'/><rect x='4' y='8' width='8' height='5' fill='%234f9be8'/><rect x='4' y='13' width='3' height='2' fill='%23333'/><rect x='9' y='13' width='3' height='2' fill='%23333'/></svg>" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="panel">
+        <header class="panel-head">
+          <div class="logo">
+            <span class="logo-pix"></span>
+            <h1>Comakers Crew</h1>
+          </div>
+          <div class="conn" id="conn" title="Server connection"><span class="dot"></span><span class="conn-text">connecting</span></div>
+        </header>
+        <div class="filters" id="filters"></div>
+        <ul id="session-list" class="session-list"></ul>
+        <div id="empty" class="empty" hidden>
+          <p><b>No Claude sessions yet.</b></p>
+          <p>Install the hooks once:</p>
+          <pre>npm run hooks:install</pre>
+          <p>then start <code>claude</code> in any terminal. Each session becomes a crew member here.</p>
+          <button id="demo-btn" class="btn">▶ Run demo crew</button>
+        </div>
+        <section id="details" class="details" hidden></section>
+        <footer class="panel-foot" id="legend">
+          <span><i class="sw working"></i>Working</span>
+          <span><i class="sw permission"></i>Permission</span>
+          <span><i class="sw waiting"></i>Waiting</span>
+          <span><i class="sw completed"></i>Done</span>
+          <span><i class="sw error"></i>Error</span>
+        </footer>
+      </aside>
+      <main id="stage">
+        <div id="canvas-host"></div>
+        <div id="summary" class="summary"></div>
+        <div id="toolbar" class="toolbar">
+          <button id="zoom-out" class="btn sm" title="Zoom out">−</button>
+          <span id="zoom-label">×2</span>
+          <button id="zoom-in" class="btn sm" title="Zoom in">+</button>
+          <button id="zoom-fit" class="btn sm" title="Fit to window">fit</button>
+        </div>
+        <div id="toast" class="toast" hidden></div>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
