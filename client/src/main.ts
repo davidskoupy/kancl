@@ -16,12 +16,14 @@ async function boot() {
     onDismiss: id => client.dismiss(id),
     onHover: id => scene.hover(id),
     onDemo: () => client.startDemo(),
+    onOpenFile: async path => panel.showToast(await client.openFile(path).catch(() => 'Server neodpovídá')),
   });
 
   scene = new Scene(host, {
     onSelect: s => panel.select(s?.id ?? null),
     onActivate: s => focus(s.id),
     onHover: () => {},
+    onJob: id => panel.selectJob(id),
   });
   await scene.init();
 
@@ -36,6 +38,7 @@ async function boot() {
     onRemove: (id, reason) => { scene.remove(id); panel.remove(id); attention.remove(id); if (reason) panel.showToast(`Sezení skončilo (${reason})`); },
     onState: st => panel.setConnection(st),
     onProjects: p => { scene.setProjects(p); panel.setProjects(p); },
+    onNight: n => { scene.setNight(n); panel.setNight(n); },
   });
 
   async function focus(id: string) {

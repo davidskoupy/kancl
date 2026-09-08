@@ -423,3 +423,37 @@ export function signSprite(): ObjectSprite {
     return { frames: [px.texture()], w: 14, h: 22 };
   });
 }
+
+// ---- roboti noční směny -------------------------------------------------------
+const ROBOT_BODY = ['#7f8798', '#3fb8b8', '#a08be6', '#6fa3ee', '#f5c542', '#4fd18b', '#f2544f', '#c9a27a'];
+
+/** Robot 14×18 (nohy dole). anim: sleep = zavřené oči + pomalý dech, work = blikající oči a ruce na klávesnici. */
+export function robotSprite(colorIndex: number, anim: 'sleep' | 'work' | 'off'): ObjectSprite {
+  const body = ROBOT_BODY[((colorIndex % ROBOT_BODY.length) + ROBOT_BODY.length) % ROBOT_BODY.length];
+  return memo(`robot/${body}/${anim}`, () => {
+    const frames: Texture[] = [];
+    const dark = '#1b1f2e', metal = '#c7cbd8', metalD = '#8f97ab';
+    const n = anim === 'off' ? 1 : anim === 'sleep' ? 2 : 3;
+    for (let f = 0; f < n; f++) {
+      const px = new Px(14, 18);
+      const bob = anim === 'sleep' && f === 1 ? 1 : 0;
+      // anténa
+      px.vline(7, 0 + bob, 3, metalD); px.set(7, 0 + bob, anim === 'work' && f === 1 ? '#f5c542' : '#f2544f');
+      // hlava
+      px.rect(3, 3 + bob, 8, 6, metal); px.frame(3, 3 + bob, 8, 6, metalD);
+      if (anim === 'sleep') { px.hline(4, 6 + bob, 2, dark); px.hline(8, 6 + bob, 2, dark); }
+      else if (anim === 'off') { px.set(5, 6 + bob, metalD); px.set(9, 6 + bob, metalD); }
+      else { const eye = f === 2 ? '#e8fdfd' : '#3fb8b8'; px.set(5, 5 + bob, eye); px.set(9, 5 + bob, eye); px.set(5, 6 + bob, eye); px.set(9, 6 + bob, eye); }
+      // tělo
+      px.rect(2, 9 + bob, 10, 6, body); px.frame(2, 9 + bob, 10, 6, dark);
+      px.rect(5, 11 + bob, 4, 2, anim === 'work' ? (f === 1 ? '#4fd18b' : '#2f7a2c') : '#3a3f4d');
+      // ruce
+      const armY = anim === 'work' ? 12 + (f % 2) : 12;
+      px.vline(1, 10 + bob, 3, metalD); px.vline(12, 10 + bob, 3, metalD); px.set(1, armY + bob, metal); px.set(12, armY + bob, metal);
+      // pásy / nohy
+      px.rect(3, 15, 3, 3, dark); px.rect(8, 15, 3, 3, dark);
+      frames.push(px.texture());
+    }
+    return { frames, w: 14, h: 18, fps: anim === 'sleep' ? 1 : 3 };
+  });
+}

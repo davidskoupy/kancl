@@ -1,4 +1,4 @@
-import type { Session, SessionStatus, Project, Worktree, MergeRequest } from '../../../shared/types.ts';
+import type { Session, SessionStatus, Project, Worktree, MergeRequest, NightShift, Job } from '../../../shared/types.ts';
 
 export interface PanelEvents {
   onSelect: (id: string | null) => void;
@@ -6,9 +6,10 @@ export interface PanelEvents {
   onDismiss: (id: string) => void;
   onHover: (id: string | null) => void;
   onDemo: () => void;
+  onOpenFile: (path: string) => void;
 }
 
-type Sel = { kind: 'session' | 'project'; id: string } | null;
+type Sel = { kind: 'session' | 'project' | 'job'; id: string } | null;
 
 const ORDER: Record<SessionStatus, number> = { permission: 0, error: 1, waiting: 2, completed: 3, working: 4, idle: 5 };
 const LABEL: Record<SessionStatus, string> = {
@@ -18,6 +19,7 @@ const HOST_LABEL: Record<Project['host'], string> = { github: 'github', gitlab: 
 const MR_LABEL: Record<MergeRequest['state'], string> = { open: 'otevřený', draft: 'draft', approved: 'schválený', changes_requested: 'změny' };
 const ATTENTION: SessionStatus[] = ['permission', 'waiting', 'error', 'completed'];
 const KLID_VISIBLE = 8;
+const JOB_LABEL: Record<Job['state'], string> = { spi: 'spí', bezi: 'běží', ok: 'ok', chyba: 'chyba', vypnuto: 'hotovo' };
 const LOOSE_ID = '__loose__';
 
 function ago(ts: number): string {
@@ -39,6 +41,19 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 }
 
+/** "dnes 07:04", "včera 07:04", "8. 9. 07:04" */
+function dayClock(ts: number): string {
+  const d = new Date(ts), now = new Date();
+  const same = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  const t = new Date(now); t.setDate(now.getDate() + 1);
+  const time = clock(ts);
+  if (same(d, now)) return `dnes ${time}`;
+  if (same(d, y)) return `včera ${time}`;
+  if (same(d, t)) return `zítra ${time}`;
+  return `${d.getDate()}. ${d.getMonth() + 1}. ${time}`;
+}
+
 function plural(n: number, one: string, few: string, many: string): string {
   return n === 1 ? one : n >= 2 && n <= 4 ? few : many;
 }
@@ -55,6 +70,7 @@ export class Panel {
   private toast = document.getElementById('toast')!;
   private sessions = new Map<string, Session>();
   private projects: Project[] = [];
+  private night: NightShift = { jobs: [], scannedAt: 0 };
   private sel: Sel = null;
   private filter: 'all' | 'attention' = 'all';
   private showAllKlid = false;
@@ -96,6 +112,13 @@ export class Panel {
   }
 
   setProjects(projects: Project[]) { this.projects = projects; this.render(); }
+  setNight(n: NightShift) { this.night = n; this.render(); }
+  selectJob(id: string) {
+    this.events.onSelect(null);
+    this.sel = { kind: 'job', id };
+    this.render();
+    this.list.querySelector(`[data-jid="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' });
+  }
   upsert(s: Session) { this.sessions.set(s.id, s); this.render(); }
   remove(id: string) {
     this.sessions.delete(id);
@@ -184,7 +207,9 @@ export class Panel {
     }
     if (klidHidden) html.push(`<li class="more" data-more="1">+ ${klidHidden} ${plural(klidHidden, 'další', 'další', 'dalších')}</li>`);
     else if (this.showAllKlid && klidShown > KLID_VISIBLE) html.push(`<li class="more" data-more="0">sbalit</li>`);
+    html.push(this.renderNight());
     this.list.innerHTML = html.join('');
+    this.list.querySelectorAll<HTMLElement>('.job').forEach(li => li.addEventListener('click', () => this.selectJob(li.dataset.jid!)));
 
     this.list.querySelectorAll<HTMLLIElement>('.session').forEach(li => {
       const id = li.dataset.id!;
@@ -210,6 +235,60 @@ export class Panel {
     this.renderDetails();
   }
 
+  private renderNight(): string {
+    const jobs = this.filter === 'attention' ? this.night.jobs.filter(j => j.state === 'chyba') : this.night.jobs;
+    if (!jobs.length && !this.night.stock) return '';
+    const stock = this.night.stock;
+    const stockHtml = stock ? `
+      <li class="stock ${stock.items.some(i => i.alarm) ? 'alarm' : ''}" title="zásoba témat content enginu (${dayClock(stock.at)})">
+        <span class="k">zásoba témat</span>
+        ${stock.items.map(i => `<span class="${i.alarm ? 'al' : ''}">${esc(i.project)} <b>${i.pending}</b></span>`).join('<i>·</i>')}
+      </li>` : '';
+    const rows = jobs.map(j => {
+      const r = j.lastResult;
+      let line: string;
+      if (j.lastRunAt && (j.state === 'ok' || j.state === 'chyba' || j.state === 'bezi' || r)) {
+        const what = r ? `${r.project ? esc(r.project) + ' ' : ''}${r.result === 'ok' ? '✓' : r.result === 'skip' ? '⏭' : '✗'}${r.slug ? ' ' + esc(r.slug) : ''}` : j.state === 'bezi' ? 'běží…' : 'proběhlo';
+        line = `poslední: ${dayClock(j.lastRunAt)} · ${what}`;
+      } else if (j.nextRunAt) line = `další: ${dayClock(j.nextRunAt)}`;
+      else if (j.lastRunAt) line = `proběhlo ${dayClock(j.lastRunAt)}`;
+      else line = '';
+      const sel = this.sel?.kind === 'job' && this.sel.id === j.id ? 'selected' : '';
+      return `
+        <li class="job ${j.state} ${sel}" data-jid="${esc(j.id)}" title="${esc(j.description ?? '')}">
+          <i class="jdot"></i>
+          <div>
+            <div class="name"><span>${esc(j.name)}</span><span class="proj">${esc(j.scheduleHuman)}</span></div>
+            <div class="detail">${line}</div>
+          </div>
+          <div class="jstate ${j.state}">${JOB_LABEL[j.state]}</div>
+        </li>${j.id === stock?.engine || (stock && j.id === 'daily-content') ? stockHtml : ''}`;
+    }).join('');
+    const stockOrphan = stock && !jobs.some(j => j.id === 'daily-content' || j.id === stock.engine) ? stockHtml : '';
+    return `<li class="nhead"><span>Noční směna</span><span class="muted">${jobs.length} ${plural(jobs.length, 'úloha', 'úlohy', 'úloh')}</span></li>${rows}${stockOrphan}`;
+  }
+
+  private jobDetails(j: Job): string {
+    const proj = this.projects.find(p => p.id === j.projectId);
+    const r = j.lastResult;
+    return `
+      <h2><span>${esc(j.name)} <span style="color:var(--muted);font-weight:400">· noční směna</span></span>
+          <span class="jstate ${j.state}">${JOB_LABEL[j.state]}</span></h2>
+      ${j.description ? `<div class="msg">${esc(j.description)}</div>` : ''}
+      ${r ? `<div class="msg ${r.result === 'fail' ? 'error' : r.result === 'ok' ? 'completed' : ''}"><b>${esc(r.resultText)}</b>${r.project || r.slug ? ` · ${esc([r.project, r.slug].filter(Boolean).join(' / '))}` : ''}${r.note ? `<br><span class="muted">${esc(r.note)}</span>` : ''}</div>` : ''}
+      <div class="kv">
+        <span>Rozvrh</span><b>${esc(j.scheduleHuman)}${j.schedule ? ` <span class="muted">(${esc(j.schedule)})</span>` : ''}</b>
+        <span>Poslední běh</span><b>${j.lastRunAt ? dayClock(j.lastRunAt) : '—'}</b>
+        <span>Další běh</span><b>${j.nextRunAt ? dayClock(j.nextRunAt) : j.enabled ? '—' : 'vypnuto'}</b>
+        <span>Projekt</span><b title="${esc(j.cwd ?? '')}">${esc(proj?.name ?? j.cwd ?? '—')}</b>
+        <span>Zdroj</span><b>${j.source === 'claude' ? 'naplánovaná úloha Claude' : 'cron-job.org'}</b>
+      </div>
+      <div class="actions">
+        ${j.filePath ? `<button class="btn" data-act="open">Otevřít SKILL.md</button>` : ''}
+        ${proj ? `<button class="btn" data-act="proj">Projekt ${esc(proj.name)}</button>` : ''}
+      </div>`;
+  }
+
   private projectMeta(p: Project): string {
     const parts: string[] = [];
     if (p.worktrees.length > 1) parts.push(`${p.worktrees.length} worktree`);
@@ -227,7 +306,7 @@ export class Panel {
   }
 
   private renderSummary(all: Session[]) {
-    if (!all.length) {
+    if (!all.length && !this.night.jobs.length) {
       this.summary.innerHTML = `<span style="color:var(--muted)">žádné sezení — spusť <b>claude</b> kdekoli</span>`;
       return;
     }
@@ -238,17 +317,31 @@ export class Panel {
     if (dotaz) parts.push(`<span class="permission"><b>${dotaz}</b> ${plural(dotaz, 'dotaz', 'dotazy', 'dotazů')}</span>`);
     const err = all.filter(s => s.status === 'error').length;
     if (err) parts.push(`<span class="error"><b>${err}</b> ${plural(err, 'chyba', 'chyby', 'chyb')}</span>`);
+    const todayOk = this.night.jobs.filter(j => j.state === 'ok').length;
+    const jobErr = this.night.jobs.filter(j => j.state === 'chyba').length;
+    if (todayOk) parts.push(`<span class="completed"><b>${todayOk}</b> ${plural(todayOk, 'úloha', 'úlohy', 'úloh')} ✓</span>`);
+    if (jobErr) parts.push(`<span class="error"><b>${jobErr}</b> ${plural(jobErr, 'úloha', 'úlohy', 'úloh')} ✗</span>`);
     this.summary.innerHTML = parts.join('<span style="opacity:.4">·</span>');
   }
 
   private renderDetails() {
     if (!this.sel) { this.details.hidden = true; return; }
+    if (this.sel.kind === 'job') {
+      const j = this.night.jobs.find(x => x.id === this.sel!.id);
+      if (!j) { this.details.hidden = true; return; }
+      this.details.hidden = false;
+      this.details.innerHTML = this.jobDetails(j);
+      this.details.querySelector('[data-act="open"]')?.addEventListener('click', () => this.events.onOpenFile(j.filePath!));
+      this.details.querySelector('[data-act="proj"]')?.addEventListener('click', () => { this.sel = { kind: 'project', id: j.projectId! }; this.render(); });
+      return;
+    }
     if (this.sel.kind === 'project') {
       const p = this.projects.find(x => x.id === this.sel!.id);
       if (!p) { this.details.hidden = true; return; }
       this.details.hidden = false;
       this.details.innerHTML = this.projectDetails(p);
       this.details.querySelectorAll<HTMLElement>('[data-sid]').forEach(el => el.addEventListener('click', () => this.events.onSelect(el.dataset.sid!)));
+      this.details.querySelectorAll<HTMLElement>('[data-jid]').forEach(el => el.addEventListener('click', () => this.selectJob(el.dataset.jid!)));
       return;
     }
     const s = this.sessions.get(this.sel.id);
@@ -271,6 +364,8 @@ export class Panel {
       <li class="mr"><a href="${esc(m.url)}" target="_blank" rel="noopener">${p.host === 'gitlab' ? '!' : '#'}${m.number}</a>
         <span title="${esc(m.title)}">${esc(m.title)}</span> <span class="status ${m.state === 'approved' ? 'completed' : m.state === 'changes_requested' ? 'error' : 'idle'}">${MR_LABEL[m.state]}</span>
         <span class="muted">${esc(m.branch)}</span></li>`;
+    const jobsHere = this.night.jobs.filter(j => j.projectId === p.id);
+    const jobsHtml = jobsHere.map(j => `<li class="mini" data-jid="${esc(j.id)}"><b>🤖 ${esc(j.name)}</b> <span class="jstate ${j.state}">${JOB_LABEL[j.state]}</span> <span class="muted">${esc(j.scheduleHuman)}</span></li>`).join('');
     const mine = [...this.sessions.values()].filter(s => s.projectId === p.id);
     const sess = mine.map(s => `<li class="mini ${s.status}" data-sid="${esc(s.id)}"><b>${esc(s.name)}</b> <span class="status ${s.status}">${LABEL[s.status]}</span> <span class="muted">${esc(s.lastDetail ?? s.message ?? '')}</span></li>`).join('');
     return `
@@ -280,6 +375,7 @@ export class Panel {
       <div class="tbl"><table>${p.worktrees.map(wt).join('')}</table></div>
       ${p.mrs.length ? `<div class="label">${p.host === 'gitlab' ? 'Merge requesty' : 'Pull requesty'}</div><ul class="mrs">${p.mrs.map(mr).join('')}</ul>` : p.host !== 'none' && !p.mrsError ? `<div class="muted">žádné otevřené PR/MR</div>` : ''}
       ${sess ? `<div class="label">Sezení</div><ul class="mrs">${sess}</ul>` : ''}
+      ${jobsHtml ? `<div class="label">Noční směna</div><ul class="mrs">${jobsHtml}</ul>` : ''}
       ${p.remoteUrl && !p.remoteUrl.startsWith('file://') ? `<div class="muted" style="margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.remoteUrl)}">${esc(p.remoteUrl)}</div>` : ''}`;
   }
 

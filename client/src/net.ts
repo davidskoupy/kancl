@@ -1,4 +1,4 @@
-import type { Session, ServerMessage, Project } from '../../shared/types.ts';
+import type { Session, ServerMessage, Project, NightShift } from '../../shared/types.ts';
 
 export type ConnState = 'connecting' | 'ok' | 'error' | 'demo';
 
@@ -7,11 +7,13 @@ export interface ClientEvents {
   onRemove: (id: string, reason?: string) => void;
   onState: (state: ConnState) => void;
   onProjects: (projects: Project[]) => void;
+  onNight: (night: NightShift) => void;
 }
 
 export class KanclClient {
   sessions = new Map<string, Session>();
   projects: Project[] = [];
+  night: NightShift = { jobs: [], scannedAt: 0 };
   state: ConnState = 'connecting';
   private es?: EventSource;
 
@@ -42,8 +44,14 @@ export class KanclClient {
         for (const id of [...this.sessions.keys()]) if (!seen.has(id)) { this.sessions.delete(id); this.events.onRemove(id); }
         this.projects = msg.projects ?? [];
         this.events.onProjects(this.projects);
+        this.night = msg.night ?? { jobs: [], scannedAt: 0 };
+        this.events.onNight(this.night);
         break;
       }
+      case 'night':
+        this.night = msg.night;
+        this.events.onNight(this.night);
+        break;
       case 'projects':
         this.projects = msg.projects;
         this.events.onProjects(this.projects);
@@ -64,6 +72,13 @@ export class KanclClient {
     const r = await fetch(`/api/sessions/${encodeURIComponent(id)}/focus`, { method: 'POST' });
     const j = await r.json().catch(() => ({}));
     return j.result ?? j.error ?? 'done';
+  }
+
+  async openFile(path: string): Promise<string> {
+    if (this.state === 'demo') return 'demo: tady bych otevřel SKILL.md';
+    const r = await fetch('/api/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
+    const j = await r.json().catch(() => ({}));
+    return j.ok ? 'Otevřeno' : (j.error ?? 'Nešlo otevřít');
   }
 
   async dismiss(id: string) {
@@ -140,6 +155,26 @@ export class KanclClient {
     seeds.push({ ...mk(6, 'working', 'chop', { lastTool: 'Read', lastDetail: 'Read README.md', prompt: 'Projdi dokumentaci košíku' }), cwd: dp[0].worktrees[0].path, project: dp[0].name, projectId: dp[0].id });
     for (const s of seeds) this.handle({ type: 'upsert', session: s });
     this.publishDemoProjects();
+
+    const todayAt = (h: number, m = 0) => { const d = new Date(); d.setHours(h, m, 0, 0); return d.getTime(); };
+    const job = (id: string, schedule: string, scheduleHuman: string, state: NightShift['jobs'][0]['state'], extra: Partial<NightShift['jobs'][0]> = {}): NightShift['jobs'][0] => ({
+      id, source: 'claude', name: id, schedule, scheduleHuman, enabled: true, state, ...extra,
+    });
+    this.night = {
+      jobs: [
+        job('daily-content', '0 7 * * *', 'denně 7:00', 'ok', { description: 'Denní obsahový běh — 1 článek dle rotace · zítra na řadě: katalogodpadu', lastRunAt: todayAt(7, 4), nextRunAt: todayAt(7) + 86_400_000, projectId: dp[0].id, cwd: dp[0].worktrees[0].path, filePath: '/Users/ty/.claude/scheduled-tasks/daily-content/SKILL.md',
+          lastResult: { at: todayAt(0), result: 'ok', resultText: '✅ published + deploy (CZ i SK živě)', project: 'deky', slug: 'tvrda-vs-mekka-matrace', note: 'Rotace: zahradni-domky → deky. Brány zelené, deploy CZ i SK, ground truth HTTP 200.' } }),
+        job('outreach-nove-prilezitosti', '30 5 * * *', 'denně 5:30', 'bezi', { description: 'Denní revize outreach příležitostí', lastRunAt: Date.now() - 4 * 60_000, nextRunAt: todayAt(5, 30) + 86_400_000 }),
+        job('dopner-tydenni-clanek', '0 7 * * 1', 'pondělí 7:00', 'spi', { description: 'Každé pondělí článek pro dopner.cz jako koncept', lastRunAt: todayAt(7) - 86_400_000, nextRunAt: todayAt(7) + 6 * 86_400_000, projectId: dp[1].id,
+          lastResult: { at: todayAt(0) - 86_400_000, result: 'ok', resultText: 'koncept', slug: 'kam-s-vyslouzilym-oblecenim' } }),
+        job('sberne-dvory-tydeni-vlna', '0 6 * * 1', 'pondělí 6:00', 'chyba', { description: 'Týdenní vlna sběrných dvorů', lastRunAt: Date.now() - 50 * 60_000, lastResult: { at: todayAt(0), result: 'fail', resultText: '⚠️ validace selhala', note: 'YAML validace: 2 obce bez souřadnic.' } }),
+        job('kayla-mrtva-kopie-smazat', '', 'jednou 10. 9. 9:00', 'spi', { description: 'Karanténní kontrola mrtvé kopie', fireAt: todayAt(9) + 2 * 86_400_000, nextRunAt: todayAt(9) + 2 * 86_400_000 }),
+        job('kontrola-zrani-behu-vps', '', 'jednou 3. 9. 6:15', 'vypnuto', { enabled: false, description: 'Jednorázová kontrola ranního syncu na VPS', lastRunAt: Date.now() - 5 * 86_400_000 }),
+      ],
+      stock: { engine: 'content-engine', at: todayAt(0), items: [{ project: 'deky', pending: 28, alarm: false }, { project: 'katalogodpadu', pending: 33, alarm: false }, { project: 'baliky', pending: 15, alarm: false }, { project: 'zahradni-domky', pending: 3, alarm: true }] },
+      scannedAt: Date.now(),
+    };
+    this.events.onNight(this.night);
 
     const acts: Session['activity'][] = ['build', 'chop', 'run', 'lift', 'think'];
     const tools: Record<string, [string, string]> = {

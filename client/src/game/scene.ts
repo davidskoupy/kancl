@@ -1,24 +1,38 @@
 import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js';
-import type { Session, Project } from '../../../shared/types.ts';
+import type { Session, Project, NightShift, Job } from '../../../shared/types.ts';
 import { Px, labelTexture, drawText } from './pixel.ts';
-import { deskSprite, coffeeMachineSprite, plantSprite, USER_LOOK, type ObjectSprite } from './sprites.ts';
+import { deskSprite, coffeeMachineSprite, plantSprite, USER_LOOK, robotSprite, bubbleTexture, type ObjectSprite, type BubbleKind } from './sprites.ts';
 import {
   tileTexture, workstationSprite, officeChairSprite, screenSprite, windowSprite, bookshelfSprite, executiveChairSprite,
   waterCoolerSprite, fridgeSprite, sofaSprite, roundTableSprite, printerSprite, clockSprite, posterSprite, cabinetSprite,
   nameplateSprite, type ScreenKind,
 } from './office.ts';
-import { W, H, TILE, COLS, ROWS, groundMap, USER_POS, workstations, ZONES, deskCell, type Slot } from './world.ts';
+import { W, H, TILE, COLS, ROWS, groundMap, USER_POS, workstations, ZONES, deskCell, NIGHT, ROBOT_MAX, robotSlot, type Slot } from './world.ts';
 import { Actor, Agent } from './agent.ts';
 import { planIslands, planKey, type Island } from '../../../shared/plan.ts';
 import { plainAscii } from '../../../shared/names.ts';
 
 interface AnimatedObject { sprite: Sprite; frames: Texture[]; fps: number; t: number; i: number }
 
+/** "7:00", "PO 6:00", "10.9." — krátký rozvrh pod robota (3×5 font, bez diakritiky). */
+function shortSchedule(job: Job): string {
+  const h = job.scheduleHuman;
+  const m = h.match(/^denně (\S+)/); if (m) return m[1];
+  const w = h.match(/^(pondělí|úterý|středa|čtvrtek|pátek|sobota|neděle) (\S+)/);
+  if (w) return `${({ pondělí: 'PO', úterý: 'UT', středa: 'ST', čtvrtek: 'CT', pátek: 'PA', sobota: 'SO', neděle: 'NE' } as Record<string, string>)[w[1]]} ${w[2]}`;
+  const o = h.match(/^jednou (\d+)\. (\d+)\./); if (o) return `${o[1]}.${o[2]}.`;
+  const k = h.match(/^každých (\d+) min/); if (k) return `/${k[1]}M`;
+  return h.slice(0, 8);
+}
+
 export interface SceneEvents {
   onSelect: (session: Session | null) => void;
   onActivate: (session: Session) => void;
   onHover: (session: Session | null) => void;
+  onJob: (id: string) => void;
 }
+
+interface RobotView { root: Container; body: Sprite; anim: AnimatedObject; bubble: Sprite; clock: Sprite; state: Job['state']; label: string }
 
 export class Scene {
   app = new Application();
@@ -26,6 +40,8 @@ export class Scene {
   ground = new Container();
   islands = new Container();
   objects = new Container();
+  robots = new Container();
+  private robotViews = new Map<string, RobotView>();
   private projects: Project[] = [];
   private lastPlanKey = '__none__';
   private islandPlan: Island[] = [];
@@ -47,7 +63,7 @@ export class Scene {
     });
     this.host.appendChild(this.app.canvas);
     this.app.stage.addChild(this.world);
-    this.world.addChild(this.ground, this.islands, this.objects);
+    this.world.addChild(this.ground, this.islands, this.objects, this.robots);
     this.objects.sortableChildren = true;
 
     this.buildGround();
@@ -95,6 +111,7 @@ export class Scene {
     }
     drawText(px, 20, 134, 'TVUJ KANCL', 'rgba(0,0,0,0.25)');
     drawText(px, 20, 262, 'KUCHYNKA', 'rgba(0,0,0,0.2)');
+    drawText(px, NIGHT.x + 4, NIGHT.y - 10, 'NOCNI SMENA', 'rgba(63,184,184,0.7)');
     this.ground.addChild(new Sprite(px.texture()));
   }
 
@@ -221,6 +238,48 @@ export class Scene {
     }
   }
 
+  // ---- noční směna ---------------------------------------------------------
+  setNight(n: NightShift) {
+    const shown = n.jobs.filter(j => j.state !== 'vypnuto').slice(0, ROBOT_MAX);
+    const ids = new Set(shown.map(j => j.id));
+    for (const [id, v] of this.robotViews) {
+      if (!ids.has(id)) {
+        this.robots.removeChild(v.root); v.root.destroy({ children: true }); this.robotViews.delete(id);
+        const i = this.animated.indexOf(v.anim); if (i >= 0) this.animated.splice(i, 1);
+      }
+    }
+    shown.forEach((job, i) => {
+      const pos = robotSlot(i);
+      let v = this.robotViews.get(job.id);
+      if (!v) {
+        const root = new Container();
+        const body = new Sprite(); body.anchor.set(0.5, 1);
+        const bubble = new Sprite(); bubble.anchor.set(0.5, 1); bubble.y = -20; bubble.visible = false;
+        const clock = new Sprite(); clock.anchor.set(0.5, 0); clock.y = 2;
+        const anim: AnimatedObject = { sprite: body, frames: [], fps: 1, t: Math.random(), i: 0 };
+        root.addChild(body, bubble, clock);
+        root.eventMode = 'static'; root.cursor = 'pointer';
+        root.hitArea = { contains: (x: number, y: number) => x >= -9 && x <= 9 && y >= -22 && y <= 12 } as any;
+        root.on('pointertap', () => this.events.onJob(job.id));
+        this.robots.addChild(root);
+        this.animated.push(anim);
+        v = { root, body, anim, bubble, clock, state: 'vypnuto', label: '' };
+        this.robotViews.set(job.id, v);
+      }
+      v.root.position.set(pos.x, pos.y);
+      const label = shortSchedule(job);
+      if (v.state !== job.state || v.label !== label) {
+        v.state = job.state; v.label = label;
+        const spr = robotSprite(i, job.state === 'bezi' ? 'work' : job.state === 'spi' ? 'sleep' : job.state === 'vypnuto' ? 'off' : 'work');
+        v.anim.frames = spr.frames; v.anim.fps = spr.fps ?? 1; v.anim.i = 0; v.body.texture = spr.frames[0];
+        const kind: BubbleKind | null = job.state === 'spi' ? 'zz' : job.state === 'bezi' ? 'dots' : job.state === 'ok' ? 'check' : job.state === 'chyba' ? 'bang' : null;
+        if (kind) { v.bubble.texture = bubbleTexture(kind); v.bubble.visible = true; } else v.bubble.visible = false;
+        const color = job.state === 'chyba' ? '#f2544f' : job.state === 'ok' ? '#4fd18b' : job.state === 'bezi' ? '#6fa3ee' : '#a08be6';
+        v.clock.texture = labelTexture(label, { color });
+      }
+    });
+  }
+
   // ---- sessions ----------------------------------------------------------
   upsert(session: Session) {
     let a = this.agents.get(session.id);
@@ -294,7 +353,7 @@ export class Scene {
   private update(dt: number) {
     for (const o of this.animated) {
       o.t += dt;
-      if (o.t >= 1 / o.fps) { o.t = 0; o.i = (o.i + 1) % o.frames.length; o.sprite.texture = o.frames[o.i]; }
+      if (o.frames.length && o.t >= 1 / o.fps) { o.t = 0; o.i = (o.i + 1) % o.frames.length; o.sprite.texture = o.frames[o.i]; }
     }
     this.user.tick(dt);
     this.reconsiderTimer += dt;

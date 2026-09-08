@@ -2,6 +2,7 @@ import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { createReadStream, existsSync } from 'node:fs';
 import { join, extname, resolve, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { Store, type HookPayload } from './state.ts';
 import { focusTerminal } from './focus.ts';
@@ -116,6 +117,19 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ---- API -----------------------------------------------------------
+    // otevřít SKILL.md úlohy ve výchozí aplikaci (jen soubory pod ~/.claude/scheduled-tasks)
+    if (req.method === 'POST' && path === '/api/open') {
+      const raw = await readBody(req);
+      let body: { path?: string } = {};
+      try { body = JSON.parse(raw); } catch { return json(res, 400, { error: 'bad json' }); }
+      const allowed = join(homedir(), '.claude', 'scheduled-tasks') + '/';
+      const target = resolve(String(body.path ?? ''));
+      if (!target.startsWith(allowed) || !existsSync(target)) return json(res, 403, { error: 'cesta není povolená' });
+      const { execFile } = await import('node:child_process');
+      execFile('open', ['-t', target], () => {});
+      return json(res, 200, { ok: true });
+    }
+
     if (req.method === 'GET' && path === '/api/night') {
       return json(res, 200, { night: night.night });
     }

@@ -8,7 +8,7 @@ import type { Activity } from '../../../shared/types.ts';
 // ---------------------------------------------------------------------------
 export type TileKind =
   | 'carpet' | 'wood' | 'kitchenTile' | 'corridor' | 'glass' | 'doorway'
-  | 'wallH' | 'wallTop' | 'wallBottom' | 'wallSide' | 'wallLow' | 'entrance';
+  | 'wallH' | 'wallTop' | 'wallBottom' | 'wallSide' | 'wallLow' | 'entrance' | 'server';
 
 const WALL = '#5a6070', WALL_D = '#3a3f4d', WALL_L = '#6f7789', BASE = '#2a2e3a';
 const tileCache = new Map<string, Texture>();
@@ -65,6 +65,13 @@ export function tileTexture(kind: TileKind, variant = 0): Texture {
     }
     case 'wallBottom': {
       px.clear(WALL); px.rect(0, 12, 16, 4, BASE); px.hline(0, 11, 16, WALL_D);
+      break;
+    }
+    case 'server': {
+      px.clear('#1d2233');
+      for (let y = 0; y < 16; y += 4) px.hline(0, y, 16, '#232a40');
+      for (let x = 0; x < 16; x += 4) px.vline(x, 0, 16, '#232a40');
+      if (r() < 0.35) px.set(2 + ((r() * 12) | 0), 2 + ((r() * 12) | 0), r() < 0.5 ? '#3fb8b8' : '#4fd18b');
       break;
     }
     case 'wallSide': {
