@@ -91,6 +91,21 @@ Kancl při startu projde `~/Code` (a další kořeny z configu), sloučí složk
 
 PR/MR se obnovují každých 5 minut a 10 s po skončení tahu sezení v daném projektu.
 
+## Noční směna
+
+Dole v kanceláři je serverovna. Každý robot je jedna **naplánovaná úloha Claude** (ty ze `~/.claude/scheduled-tasks`,
+rozvrh čte Kancl ze `scheduled-tasks.json` aplikace Claude). Robot spí do času běhu, po běhu drží ✓ nebo !.
+Pod robotem jsou hodiny s rozvrhem. V panelu je sekce **Noční směna**: rozvrh česky, poslední běh, výsledek.
+
+Výsledek běhu bere Kancl z logů obsahových enginů:
+
+- **content engine** (`~/Code/content-engine/runs.md` + `state.json`): který web byl na řadě, jestli běh prošel,
+  kdo je zítra na řadě, a **zásoba témat** (žlutě, když některý web klesne na 5 a méně).
+- **Dopner** (`~/Code/Dopner/content-runs.md`): stav týdenního článku.
+
+Kancl úlohy **nespouští ani nevypíná**, jen čte. Klik na robota otevře detail, tlačítko `Otevřít SKILL.md` otevře
+zadání úlohy ve výchozím editoru. cron-job.org zatím napojený není (datový model s ním počítá, chybí API klíč).
+
 ## Config
 
 `~/.config/kancl/config.json` vznikne při prvním startu:
@@ -101,13 +116,23 @@ PR/MR se obnovují každých 5 minut a 10 s po skončení tahu sezení v daném 
   "hidden": [],
   "gitIntervalSec": 15,
   "remoteIntervalMin": 5,
-  "gitlabHosts": ["gitlab.shean.dev"]
+  "gitlabHosts": ["gitlab.shean.dev"],
+  "night": {
+    "enabled": true,
+    "engines": [
+      { "id": "content-engine", "runsFile": "~/Code/content-engine/runs.md", "stateFile": "~/Code/content-engine/state.json", "taskId": "daily-content" },
+      { "id": "dopner", "runsFile": "~/Code/Dopner/content-runs.md", "taskId": "dopner-tydenni-clanek", "columns": { "slug": 1, "result": 2, "note": 4 } }
+    ]
+  }
 }
 ```
 
 - `roots` — složky, ve kterých se hledají projekty (jen první úroveň).
 - `hidden` — id projektů (`github.com/user/repo`) nebo názvy složek, které se nemají ukazovat.
 - `gitlabHosts` — hostitelé, které se mají brát jako GitLab (kromě těch, co mají „gitlab" v názvu).
+- `night.enabled` — vypne noční směnu.
+- `night.engines` — logy enginů: `runsFile`, volitelně `stateFile`, `taskId` (id naplánované úlohy, ke které výsledek patří)
+  a `columns` (indexy sloupců tabulky, výchozí `| datum | web | téma | výsledek | poznámka |`).
 
 Změna configu vyžaduje restart serveru.
 
@@ -126,6 +151,7 @@ claude ──hook──▶ hook/kancl-hook.sh ──POST /hook──▶ server (
 - **`server/state.ts`** převádí hooky na stavový automat sezení, **`server/scanner.ts`** skenuje projekty,
   **`server/projects.ts`** je čistá logika (normalizace remotů, slučování, stav, řazení).
 - **`shared/plan.ts`** rozděluje 12 stolů mezi projekty: aktivní dostanou počet sezení + 1 (nejvýš 4), klidné po jednom.
+- **`server/night.ts`** je čistá logika noční směny (cron, český rozvrh, parser runs.md, zásoba, stav), **`server/nightScanner.ts`** ji krmí ze souborů.
 - **`client/`** vykresluje kancelář v PixiJS. Všechny sprity se generují v kódu, žádné obrázky.
 
 ## Skripty
@@ -145,7 +171,8 @@ Prostředí: `KANCL_PORT` (výchozí `4242`) respektuje server i hook; `KANCL_DE
 
 ```
 hook/      kancl-hook.sh, install.mjs
-server/    index.ts (HTTP + SSE), state.ts (sezení), scanner.ts (projekty, I/O), projects.ts (čistá logika), config.ts, focus.ts
+server/    index.ts (HTTP + SSE), state.ts (sezení), scanner.ts (projekty, I/O), projects.ts (čistá logika),
+           night.ts (noční směna, čistá logika), nightScanner.ts (I/O), config.ts, focus.ts
 shared/    types.ts, plan.ts (ostrůvky), names.ts (přezdívky)
 client/    Vite + PixiJS
   src/game/  pixel.ts, sprites.ts, office.ts, world.ts, agent.ts, scene.ts
