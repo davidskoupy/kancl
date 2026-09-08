@@ -1,8 +1,8 @@
 {
-  "name": "comakers-crew",
+  "name": "kancl",
   "version": "0.1.0",
   "private": true,
-  "description": "Comakers Crew — a live 32x32 pixel-art monitor for your Claude Code sessions",
+  "description": "Kancl — pixel-artový velín nad Claude Code sezeními a projekty",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n server,client -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
@@ -13,7 +13,8 @@
     "serve": "tsx server/index.ts",
     "hooks:install": "node hook/install.mjs",
     "hooks:uninstall": "node hook/install.mjs --uninstall",
-    "typecheck": "tsc -p client/tsconfig.json --noEmit && tsc -p server/tsconfig.json --noEmit"
+    "typecheck": "tsc -p client/tsconfig.json --noEmit && tsc -p server/tsconfig.json --noEmit",
+    "test": "node --import tsx --test tests/"
   },
   "dependencies": {
     "pixi.js": "^8.6.6",
@@ -31,9 +32,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/rontoday/comakers-crew.git"
+    "url": "https://github.com/davidskoupy/kancl.git"
   },
-  "homepage": "https://github.com/rontoday/comakers-crew#readme",
+  "homepage": "https://github.com/davidskoupy/kancl#readme",
   "keywords": [
     "claude-code",
     "claude",
@@ -42,6 +43,7 @@
     "pixijs",
     "hooks",
     "agents",
-    "dashboard"
+    "dashboard",
+    "kancl"
   ]
 }

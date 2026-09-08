@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Installs (or removes) the Comakers Crew hooks in ~/.claude/settings.json.
+// Instaluje (nebo odebere) hooky Kanclu v ~/.claude/settings.json.
 // Existing hooks are preserved; a timestamped backup is written first.
 import { readFileSync, writeFileSync, existsSync, copyFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
@@ -8,8 +8,8 @@ import { homedir } from 'node:os';
 
 const uninstall = process.argv.includes('--uninstall');
 const settingsPath = process.env.CLAUDE_SETTINGS ?? join(homedir(), '.claude', 'settings.json');
-const scriptPath = resolve(dirname(fileURLToPath(import.meta.url)), 'comakers-hook.sh');
-const MARK = 'comakers-hook.sh';
+const scriptPath = resolve(dirname(fileURLToPath(import.meta.url)), 'kancl-hook.sh');
+const MARKS = ['kancl-hook.sh', 'comakers-hook.sh']; // druhá kvůli úklidu po přejmenování
 
 const EVENTS = [
   'SessionStart', 'SessionEnd', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse',
@@ -27,7 +27,7 @@ if (existsSync(settingsPath)) {
 }
 
 settings.hooks ??= {};
-const isOurs = h => typeof h?.command === 'string' && h.command.includes(MARK);
+const isOurs = h => typeof h?.command === 'string' && MARKS.some(m => h.command.includes(m));
 
 // remove ours everywhere first (idempotent re-install)
 for (const ev of Object.keys(settings.hooks)) {
@@ -50,5 +50,5 @@ if (!uninstall) {
 if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
 
 writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
-console.log(`${uninstall ? 'removed' : 'installed'} Comakers Crew hooks in ${settingsPath}`);
-if (!uninstall) console.log('New Claude Code sessions will report to http://127.0.0.1:4242 (running ones: restart claude).');
+console.log(`${uninstall ? 'odebrány' : 'nainstalovány'} hooky Kanclu v ${settingsPath}`);
+if (!uninstall) console.log('Nová Claude Code sezení se budou hlásit na http://127.0.0.1:4242 (běžící: restartuj claude).');

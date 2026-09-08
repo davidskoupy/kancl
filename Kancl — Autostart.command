@@ -1,16 +1,16 @@
 #!/bin/bash
-# Double-click to toggle "start Comakers Crew when I log in" (macOS LaunchAgent).
+# Dvojklikem zapneš/vypneš „spustit Kancl po přihlášení" (macOS LaunchAgent).
 cd "$(dirname "$0")" || exit 1
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-LABEL="com.comakers.crew"
+LABEL="cz.skoupy.kancl"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 NODE_BIN="$(dirname "$(command -v node)")"
-mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.comakers"
+mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.kancl"
 
 if [ -f "$PLIST" ]; then
   launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1
   rm -f "$PLIST"
-  echo "Autostart DISABLED. Comakers Crew will no longer start at login."
+  echo "Autostart VYPNUT. Kancl se po přihlášení už nespustí."
 else
   [ -f dist/index.html ] || npm run build
   cat > "$PLIST" <<PL
@@ -25,13 +25,13 @@ else
   <key>EnvironmentVariables</key><dict><key>PATH</key><string>$NODE_BIN:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>$HOME/.comakers/server.log</string>
-  <key>StandardErrorPath</key><string>$HOME/.comakers/server.log</string>
+  <key>StandardOutPath</key><string>$HOME/.kancl/server.log</string>
+  <key>StandardErrorPath</key><string>$HOME/.kancl/server.log</string>
 </dict></plist>
 PL
   launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null || launchctl load "$PLIST"
-  echo "Autostart ENABLED. Comakers Crew now starts at login and restarts if it crashes."
-  echo "Open it any time at http://127.0.0.1:4242 (double-click this file again to disable)."
+  echo "Autostart ZAPNUT. Kancl se spustí po přihlášení a po pádu se sám restartuje."
+  echo "Otevřeš ho kdykoli na http://127.0.0.1:4242 (dalším dvojklikem autostart vypneš)."
 fi
 sleep 3
 osascript -e 'tell application "Terminal" to close (every window whose name contains "Autostart.command")' >/dev/null 2>&1 &

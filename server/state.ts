@@ -1,18 +1,13 @@
 import { basename } from 'node:path';
 import type { Activity, Session, SessionStatus, TerminalInfo, ServerMessage } from '../shared/types.ts';
+import { NAMES } from '../shared/names.ts';
 
-/** Payload posted by hook/comakers-hook.sh */
+/** Payload z hook/kancl-hook.sh */
 export interface HookPayload {
   hook: Record<string, any>;
   meta?: Partial<TerminalInfo> & { model?: string };
 }
 
-const NAMES = [
-  'Ada', 'Bit', 'Cody', 'Dot', 'Echo', 'Fizz', 'Gus', 'Hex', 'Ivy', 'Jax',
-  'Kit', 'Lex', 'Mo', 'Nova', 'Ox', 'Pip', 'Quin', 'Rex', 'Sol', 'Tux',
-  'Uma', 'Vex', 'Wren', 'Xen', 'Yoshi', 'Zed', 'Bea', 'Cal', 'Dev', 'Eli',
-  'Fox', 'Gem', 'Hal', 'Ike', 'Jo', 'Kai', 'Lu', 'Max', 'Nix', 'Ollie',
-];
 export const COLOR_COUNT = 10;
 
 function hash(s: string): number {

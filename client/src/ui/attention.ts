@@ -6,7 +6,7 @@ import { renderPose, lookFor, type Pose } from '../game/sprites.ts';
  * tab title (with a counter and blinking), favicon badge, system notifications, optional sound.
  */
 
-const BASE_TITLE = 'Comakers Crew';
+const BASE_TITLE = 'Kancl';
 const PRIORITY: SessionStatus[] = ['permission', 'error', 'waiting', 'completed'];
 const ICON: Record<string, string> = { permission: '❓', error: '❗', waiting: '💬', completed: '✅' };
 const COLOR: Record<string, string> = { permission: '#f5c542', error: '#f2544f', waiting: '#b48cf2', completed: '#4fd18b' };
@@ -25,8 +25,8 @@ export class Attention {
   private baseIcon: HTMLCanvasElement;
   private lastBadge = '';
   private audio?: AudioContext;
-  notify = localStorage.getItem('crew.notify') === '1';
-  sound = localStorage.getItem('crew.sound') === '1';
+  notify = localStorage.getItem('kancl.notify') === '1';
+  sound = localStorage.getItem('kancl.sound') === '1';
 
   constructor(private events: AttentionEvents) {
     this.link = document.querySelector('link[rel="icon"]') ?? document.createElement('link');
@@ -46,13 +46,13 @@ export class Attention {
     }
     if (!('Notification' in window)) on = false;
     this.notify = on;
-    localStorage.setItem('crew.notify', on ? '1' : '0');
+    localStorage.setItem('kancl.notify', on ? '1' : '0');
     return on;
   }
 
   setSound(on: boolean) {
     this.sound = on;
-    localStorage.setItem('crew.sound', on ? '1' : '0');
+    localStorage.setItem('kancl.sound', on ? '1' : '0');
     if (on) this.beep('permission'); // audible confirmation, also unlocks the AudioContext
   }
 
@@ -160,14 +160,14 @@ export class Attention {
     if (this.sound && (s.status === 'permission' || s.status === 'error')) this.beep(s.status);
     if (!this.notify || !('Notification' in window) || Notification.permission !== 'granted') return;
     const titles: Record<string, string> = {
-      permission: `${s.name} needs your permission`,
-      error: `${s.name} hit an error`,
-      waiting: `${s.name} is waiting for you`,
-      completed: `${s.name} finished`,
+      permission: `${s.name} potřebuje povolení`,
+      error: `${s.name} narazil na chybu`,
+      waiting: `${s.name} čeká na odpověď`,
+      completed: `${s.name} má hotovo`,
     };
     const n = new Notification(titles[s.status], {
       body: `${s.project}${s.message ? ' — ' + short(s.message, 120) : ''}`,
-      tag: `crew-${s.id}`,        // replaces the previous notification for the same session
+      tag: `kancl-${s.id}`,        // replaces the previous notification for the same session
       silent: true,
     });
     n.onclick = () => { window.focus(); this.events.onOpen(s.id); n.close(); };

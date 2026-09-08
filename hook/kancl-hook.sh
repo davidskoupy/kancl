@@ -1,9 +1,9 @@
 #!/bin/bash
-# Comakers Crew — Claude Code hook forwarder.
+# Kancl — Claude Code hook forwarder.
 # Reads the hook JSON from stdin, adds terminal info, POSTs it to the local server.
 # It must never block or fail Claude: every path exits 0 quickly.
 
-PORT="${COMAKERS_PORT:-4242}"
+PORT="${KANCL_PORT:-4242}"
 INPUT=$(cat)
 [ -z "$INPUT" ] && exit 0
 

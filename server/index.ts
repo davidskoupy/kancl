@@ -8,8 +8,8 @@ import { focusTerminal } from './focus.ts';
 import type { ServerMessage } from '../shared/types.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.COMAKERS_PORT ?? 4242);
-const HOST = process.env.COMAKERS_HOST ?? '127.0.0.1';
+const PORT = Number(process.env.KANCL_PORT ?? 4242);
+const HOST = process.env.KANCL_HOST ?? '127.0.0.1';
 const DIST = resolve(__dirname, '../dist');
 
 const store = new Store();
@@ -66,7 +66,7 @@ async function serveStatic(res: http.ServerResponse, urlPath: string) {
   }
   if (!existsSync(file)) {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
-    return res.end('Client not built. Run `npm run build` (or `npm run dev` for the Vite dev server).');
+    return res.end('Klient není sestavený. Spusť `npm run build` (nebo `npm run dev` pro Vite dev server).');
   }
   res.writeHead(200, { 'Content-Type': MIME[extname(file)] ?? 'application/octet-stream' });
   createReadStream(file).pipe(res);
@@ -94,7 +94,7 @@ const server = http.createServer(async (req, res) => {
       if (!payload.hook) payload = { hook: payload as any };
       const ev = payload.hook.hook_event_name;
       const s = store.apply(payload);
-      if (process.env.COMAKERS_DEBUG) console.log(`[hook] ${ev} ${s?.name ?? ''} ${s?.status ?? 'removed'}`);
+      if (process.env.KANCL_DEBUG) console.log(`[hook] ${ev} ${s?.name ?? ''} ${s?.status ?? 'removed'}`);
       return json(res, 200, { ok: true });
     }
 
@@ -147,10 +147,10 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`Comakers Crew server → http://${HOST}:${PORT}`);
-  console.log(`  hooks post to  POST http://${HOST}:${PORT}/hook`);
+  console.log(`Kancl → http://${HOST}:${PORT}`);
+  console.log(`  hooky posílají POST http://${HOST}:${PORT}/hook`);
   if (!existsSync(join(DIST, 'index.html'))) {
-    console.log('  (client not built yet: run `npm run build`, or use `npm run dev`)');
+    console.log('  (klient není sestavený: spusť `npm run build`, nebo `npm run dev`)');
   }
   if (process.argv.includes('--open') && process.platform === 'darwin') {
     import('node:child_process').then(({ exec }) => exec(`open http://127.0.0.1:${PORT}`));
