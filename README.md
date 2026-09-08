@@ -106,6 +106,20 @@ Výsledek běhu bere Kancl z logů obsahových enginů:
 Kancl úlohy **nespouští ani nevypíná**, jen čte. Klik na robota otevře detail, tlačítko `Otevřít SKILL.md` otevře
 zadání úlohy ve výchozím editoru. cron-job.org zatím napojený není (datový model s ním počítá, chybí API klíč).
 
+### Cloud přes most
+
+Cloudové routiny (claude.ai/code/routines) a cloudová sezení nejsou na disku a jdou číst jen s přihlašovacím
+tokenem. Kancl token nedrží. Místo toho naplánovaná lokální úloha **`kancl-cloud-snapshot`** (každou hodinu v :27)
+vypíše routiny a sezení nástroji, které má sezení Claude, a zapíše ořezaný snímek do `~/.kancl/cloud.json`:
+názvy, rozvrhy, stav posledního běhu, odkazy. Žádné prompty, žádný obsah sezení.
+
+- Routiny jsou v serverovně **bílí roboti** (lokální úlohy barevní), v panelu mají štítek `cloud`
+  a v detailu odkaz „Otevřít na claude.ai". Cron routin je v UTC, Kancl ho ukazuje v místním čase.
+- Cloudová sezení jsou v panelu v sekci **V cloudu** (bez postaviček).
+- V hlavičce noční směny je stáří snímku. Starší než 2 h svítí oranžově: aplikace Claude asi neběžela,
+  protože lokální úlohy běží jen s otevřenou aplikací.
+- Cestu snímku mění `night.cloudSnapshot` v configu.
+
 ## Config
 
 `~/.config/kancl/config.json` vznikne při prvním startu:
