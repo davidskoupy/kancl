@@ -3,12 +3,21 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+export interface EngineConfig {
+  id: string;
+  runsFile: string;
+  stateFile?: string;
+  taskId: string;                       // id naplánované úlohy Claude, ke které výsledek patří
+  columns?: { project?: number; slug?: number; result: number; note?: number };
+}
+
 export interface Config {
   roots: string[];
   hidden: string[];
   gitIntervalSec: number;
   remoteIntervalMin: number;
   gitlabHosts: string[];
+  night: { enabled: boolean; engines: EngineConfig[] };
 }
 
 const DEFAULTS: Config = {
@@ -17,6 +26,13 @@ const DEFAULTS: Config = {
   gitIntervalSec: 15,
   remoteIntervalMin: 5,
   gitlabHosts: ['gitlab.shean.dev'],
+  night: {
+    enabled: true,
+    engines: [
+      { id: 'content-engine', runsFile: '~/Code/content-engine/runs.md', stateFile: '~/Code/content-engine/state.json', taskId: 'daily-content' },
+      { id: 'dopner', runsFile: '~/Code/Dopner/content-runs.md', taskId: 'dopner-tydenni-clanek', columns: { slug: 1, result: 2, note: 4 } },
+    ],
+  },
 };
 
 export const CONFIG_PATH = process.env.KANCL_CONFIG ?? join(homedir(), '.config', 'kancl', 'config.json');
@@ -34,7 +50,10 @@ export function loadConfig(): Config {
   }
   try {
     const raw = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
-    return { ...DEFAULTS, ...raw };
+    const cfg: Config = { ...DEFAULTS, ...raw, night: { ...DEFAULTS.night, ...(raw.night ?? {}) } };
+    // starší config bez sekce night → doplnit na disk, ať je vidět, co jde nastavit
+    if (!raw.night) writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n');
+    return cfg;
   } catch (e) {
     console.error(`[config] ${CONFIG_PATH} se nedá načíst, používám výchozí:`, e);
     return { ...DEFAULTS };

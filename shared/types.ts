@@ -67,6 +67,34 @@ export interface Project {
 
 export interface Subagent { id: string; description: string; startedAt: number }
 
+// ---- noční směna -----------------------------------------------------------
+export type JobSource = 'claude' | 'cronjob';
+export type JobState = 'spi' | 'bezi' | 'ok' | 'chyba' | 'vypnuto';
+
+export interface JobRun { at: number; result: 'ok' | 'fail' | 'skip'; resultText: string; project?: string; slug?: string; note?: string }
+
+export interface Job {
+  id: string;
+  source: JobSource;
+  name: string;
+  description?: string;
+  schedule: string;        // cron, nebo prázdné u jednorázové
+  scheduleHuman: string;   // "denně 7:00", "pondělí 6:00", "jednou 10. 9. 9:00"
+  enabled: boolean;
+  cwd?: string;
+  projectId?: string;
+  filePath?: string;
+  fireAt?: number;
+  lastRunAt?: number;
+  nextRunAt?: number;
+  lastResult?: JobRun;
+  state: JobState;
+}
+
+export interface Stock { engine: string; at: number; items: { project: string; pending: number; alarm: boolean }[] }
+
+export interface NightShift { jobs: Job[]; stock?: Stock; scannedAt: number }
+
 export interface SessionEvent {
   at: number;
   event: string;     // hook_event_name
@@ -100,8 +128,9 @@ export interface Session {
 }
 
 export type ServerMessage =
-  | { type: 'snapshot'; sessions: Session[]; projects: Project[]; serverStartedAt: number }
+  | { type: 'snapshot'; sessions: Session[]; projects: Project[]; night: NightShift; serverStartedAt: number }
   | { type: 'projects'; projects: Project[] }
+  | { type: 'night'; night: NightShift }
   | { type: 'upsert'; session: Session }
   | { type: 'remove'; id: string; reason?: string }
   | { type: 'ping' };

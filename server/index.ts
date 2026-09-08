@@ -7,6 +7,7 @@ import { Store, type HookPayload } from './state.ts';
 import { focusTerminal } from './focus.ts';
 import { loadConfig } from './config.ts';
 import { Scanner } from './scanner.ts';
+import { NightScanner } from './nightScanner.ts';
 import type { ServerMessage } from '../shared/types.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -17,7 +18,13 @@ const DIST = resolve(__dirname, '../dist');
 const store = new Store();
 const clients = new Set<http.ServerResponse>();
 
-const scanner = new Scanner(loadConfig(), store, projects => {
+const config = loadConfig();
+const night = new NightScanner(config, store, n => {
+  const msg: ServerMessage = { type: 'night', night: n };
+  const line = `data: ${JSON.stringify(msg)}\n\n`;
+  for (const res of clients) res.write(line);
+});
+const scanner = new Scanner(config, store, projects => {
   const msg: ServerMessage = { type: 'projects', projects };
   const line = `data: ${JSON.stringify(msg)}\n\n`;
   for (const res of clients) res.write(line);
@@ -109,6 +116,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ---- API -----------------------------------------------------------
+    if (req.method === 'GET' && path === '/api/night') {
+      return json(res, 200, { night: night.night });
+    }
+
     if (req.method === 'GET' && path === '/api/projects') {
       return json(res, 200, { projects: scanner.projects });
     }
@@ -125,7 +136,7 @@ const server = http.createServer(async (req, res) => {
         'Access-Control-Allow-Origin': '*',
       });
       res.write('retry: 2000\n\n');
-      const snapshot: ServerMessage = { type: 'snapshot', sessions: store.list(), projects: scanner.projects, serverStartedAt: store.serverStartedAt };
+      const snapshot: ServerMessage = { type: 'snapshot', sessions: store.list(), projects: scanner.projects, night: night.night, serverStartedAt: store.serverStartedAt };
       res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
       clients.add(res);
       req.on('close', () => clients.delete(res));
@@ -162,7 +173,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Kancl → http://${HOST}:${PORT}`);
-  scanner.start().catch(e => console.error('[scanner]', e));
+  scanner.start().then(() => night.start()).catch(e => console.error('[scanner]', e));
   console.log(`  hooky posílají POST http://${HOST}:${PORT}/hook`);
   if (!existsSync(join(DIST, 'index.html'))) {
     console.log('  (klient není sestavený: spusť `npm run build`, nebo `npm run dev`)');
