@@ -78,7 +78,8 @@ async function boot() {
   async function focus(id: string) {
     const s = client.sessions.get(id);
     if (!s) return;
-    panel.showToast(s.desktopId ? `Otevírám ${s.title ?? s.name} v aplikaci Claude…` : `Otevírám terminál ${s.name}…`);
+    if (s.desktopId) navigator.clipboard?.writeText(s.title ?? s.name).catch(() => {});
+    panel.showToast(s.desktopId ? `Aktivuji aplikaci Claude, „${s.title ?? s.name}" je ve schránce…` : `Otevírám terminál ${s.name}…`);
     try {
       const r = await client.focus(id);
       panel.showToast(r);

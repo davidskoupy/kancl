@@ -123,8 +123,10 @@ názvy, rozvrhy, stav posledního běhu, odkazy. Žádné prompty, žádný obsa
 ## Sezení z desktopové aplikace
 
 Kancl čte názvy sezení z aplikace Claude (`local_*.json` v Application Support) a páruje je s hooky, takže v panelu
-vidíš „Fragmento HTML šablona", ne jen přezdívku. **Enter** (nebo „Otevřít v aplikaci Claude") otevře sezení přes
-`claude://code/continue?session=…`. **Tab** přeskakuje na nejdéle čekající sezení, Shift+Tab zpět, **/** skočí do hledání.
+vidíš „Fragmento HTML šablona", ne jen přezdívku. **Enter** (nebo „Otevřít v aplikaci Claude") aktivuje aplikaci
+a dá název sezení do schránky. Deep link `claude://code/continue?session=…` Kancl posílá také, ale aplikace
+(1.46388) ho má za feature flagem a zatím na něj nereaguje; až ho zapnou, začne Enter přepínat rovnou.
+**Tab** přeskakuje na nejdéle čekající sezení, Shift+Tab zpět, **/** skočí do hledání.
 
 - `?mini=1` — pruh do rohu obrazovky: souhrn, fronta „chce mě", stav noční směny. Bez pixelové scény.
   Otevři ho v samostatném okně (Chrome → Vytvořit zástupce / otevřít jako aplikaci) a nech nahoře.

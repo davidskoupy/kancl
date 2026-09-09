@@ -23,11 +23,13 @@ function esc(s: string) {
  * Returns a short description of what it did.
  */
 export async function focusTerminal(t: TerminalInfo, desktopId?: string): Promise<string> {
-  // Desktopová aplikace Claude: deep link na konkrétní sezení (ověřeno v bundlu: claude://code/continue?session=local_…)
+  // Desktopová aplikace Claude: deep link claude://code/continue?session=local_… existuje v bundlu,
+  // ale v aktuální verzi (1.46388) je za feature flagem a nic nedělá — posíláme ho pro případ, že se zapne,
+  // a spolehlivě aspoň aktivujeme aplikaci. Název sezení dává klient do schránky.
   if (desktopId && /^local_[A-Za-z0-9-]{1,64}$/.test(desktopId)) {
     await run('open', [`claude://code/continue?session=${desktopId}`], { timeout: 3000 }).catch(() => {});
     await run('open', ['-b', 'com.anthropic.claudefordesktop'], { timeout: 3000 }).catch(() => {});
-    return 'aplikace Claude: sezení otevřeno';
+    return 'aplikace Claude aktivována (přepnutí na sezení aplikace zatím neumí, název je ve schránce)';
   }
   const program = t.program ?? '';
   const bundle = t.bundleId ?? '';
