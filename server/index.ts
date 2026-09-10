@@ -105,7 +105,7 @@ function json(res: http.ServerResponse, code: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
-async function readBody(req: http.IncomingMessage, limit = 1_000_000): Promise<string> {
+async function readBody(req: http.IncomingMessage, limit = 16_000_000): Promise<string> {
   return new Promise((resolvePromise, reject) => {
     let data = '';
     req.on('data', c => {
