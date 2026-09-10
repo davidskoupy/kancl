@@ -359,7 +359,7 @@ final class Bar: NSObject {
     last = w
     side?.ensureLoaded()
     item.button?.title = barTitle(w)
-    side?.setTitle("Kancl · \(w.sessions.working)/\(w.sessions.total) pracuje" + (w.queue.isEmpty ? "" : " · \(w.queue.count) chce tě") + (w.night.fail > 0 ? " · 🌙✗\(w.night.fail)" : "") + (w.ci.isEmpty ? "" : " · CI✗\(w.ci.count)"))
+    side?.setTitle("Kancl · \(w.sessions.working)/\(w.sessions.total) pracuje" + (w.sessions.attention == 0 ? "" : " · \(w.sessions.attention) chce tě") + (w.night.fail > 0 ? " · 🌙✗\(w.night.fail)" : "") + (w.ci.isEmpty ? "" : " · CI✗\(w.ci.count)"))
     item.button?.toolTip = "Kancl · \(w.sessions.attention) chce tě"
     for l in lines(w) {
       if l.kind == "sep" { menu.addItem(.separator()); continue }

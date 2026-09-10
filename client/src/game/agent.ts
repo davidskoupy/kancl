@@ -2,6 +2,7 @@ import { Container, Sprite, Graphics } from 'pixi.js';
 import type { Session } from '../../../shared/types.ts';
 import { hashStr, labelTexture } from './pixel.ts';
 import { plainAscii } from '../../../shared/names.ts';
+import { inQueue } from '../../../shared/attention.ts';
 import {
   buildCharacter, bubbleTexture, shadowTexture, lookFor, signSprite, STATUS_COLORS,
   type Anim, type BubbleKind, type CharacterFrames, type Dir, type Look,
@@ -131,10 +132,11 @@ export class Agent extends Actor {
   private zoneForSession(s: Session): ZoneId {
     switch (s.status) {
       case 'permission':
-      case 'completed':
-        return 'office';
       case 'waiting':
-        return Date.now() - s.statusSince > 2 * 60_000 ? 'kitchen' : 'office';
+        return 'office';
+      case 'completed':
+        // hotové přinese složku, dokud ho neotevřeš; pak zpátky ke stolu
+        return inQueue(s) ? 'office' : 'desks';
       default:
         return 'desks';
     }
@@ -229,7 +231,7 @@ export class Agent extends Actor {
     switch (s.status) {
       case 'permission': kind = 'q'; break;
       case 'error': kind = 'bang'; break;
-      case 'completed': kind = 'check'; break;
+      case 'completed': kind = inQueue(s) ? 'check' : null; break;
       case 'waiting': kind = Date.now() - s.statusSince > 90_000 ? 'zz' : 'dots'; break;
     }
     if (kind) { this.bubble.texture = bubbleTexture(kind); this.bubble.visible = true; }

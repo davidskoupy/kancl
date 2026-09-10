@@ -47,7 +47,7 @@ export class DesktopIndex {
 
   async start() {
     await this.scan().catch(e => console.error('[desktop]', e));
-    this.timer = setInterval(() => this.scan().catch(e => console.error('[desktop]', e)), 60_000);
+    this.timer = setInterval(() => this.scan().catch(e => console.error('[desktop]', e)), 15_000);
     this.timer.unref();
   }
 

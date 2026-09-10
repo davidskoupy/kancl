@@ -145,6 +145,7 @@ export interface Session {
   folder?: string;          // čitelná složka sezení (~/Code/x › worktree)
   title?: string;           // název sezení z desktopové aplikace Claude
   desktopId?: string;       // local_… pro deep link claude://code/continue?session=
+  seen?: boolean;           // hotové sezení už otevřené v aplikaci Claude
   projectId?: string;       // Project.id, pokud cwd leží v naskenovaném projektu
   status: SessionStatus;
   statusSince: number;

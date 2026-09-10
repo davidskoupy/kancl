@@ -248,3 +248,7 @@ body.digest #app { display: none; }
 .mtodo .mt { display: flex; flex-direction: column; white-space: normal; padding: 2px 0; }
 .mtodo .mt .mtt, .mtodo .mt .mtf { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mtodo .mt .mtf { color: var(--muted); font-size: 10px; }
+
+/* hotové a už viděné sezení: ztlumit */
+.session.seen .bar { opacity: .35; }
+.session.seen .status { opacity: .55; }

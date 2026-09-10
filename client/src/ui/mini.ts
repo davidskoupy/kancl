@@ -2,8 +2,6 @@ import type { Session, NightShift, SessionStatus, Todo } from '../../../shared/t
 
 /** Mini režim (?mini=1): pruh do rohu obrazovky — souhrn, fronta „chce mě", noční směna. */
 const LABEL: Record<SessionStatus, string> = { permission: 'dotaz', error: 'chyba', waiting: 'čeká', completed: 'hotovo', working: 'práce', idle: 'klid' };
-const ATTENTION: SessionStatus[] = ['permission', 'error', 'waiting', 'completed'];
-const RANK: Record<SessionStatus, number> = { permission: 0, error: 1, waiting: 2, completed: 3, working: 4, idle: 5 };
 
 function ago(ts: number): string {
   const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
@@ -14,10 +12,8 @@ function ago(ts: number): string {
 }
 function esc(s: string): string { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!)); }
 
-/** Fronta „chce mě": podle stavu, uvnitř podle délky čekání (nejdéle první). */
-export function attentionQueue(sessions: Iterable<Session>): Session[] {
-  return [...sessions].filter(s => ATTENTION.includes(s.status)).sort((a, b) => RANK[a.status] - RANK[b.status] || a.statusSince - b.statusSince);
-}
+import { attentionQueue, needsYou } from '../../../shared/attention.ts';
+export { attentionQueue };
 
 export class Mini {
   private root: HTMLElement;
@@ -39,6 +35,7 @@ export class Mini {
   private render() {
     const all = [...this.sessions.values()];
     const queue = attentionQueue(all);
+    const needs = queue.filter(needsYou).length;
     const working = all.filter(s => s.status === 'working').length;
     const jobsOk = this.night.jobs.filter(j => j.state === 'ok').length;
     const jobsErr = this.night.jobs.filter(j => j.state === 'chyba').length;
@@ -53,7 +50,7 @@ export class Mini {
     this.root.innerHTML = `
       <div class="mhead">
         <b>Kancl</b>
-        <span>${all.length} sezení · ${working} pracuje${queue.length ? ` · <em>${queue.length} chce tě</em>` : ''}</span>
+        <span>${all.length} sezení · ${working} pracuje${needs ? ` · <em>${needs} chce tě</em>` : ''}</span>
       </div>
       <ul class="mlist">${rows || '<li class="mempty">nikdo tě nepotřebuje</li>'}</ul>
       ${this.todo.length ? `<div class="mtodo"><span class="mk">k dokončení ${this.todo.length}</span>${this.todo.slice(0, 3).map(t => `<span class="mt" data-tid="${esc(t.desktopId)}" title="${esc(t.folder ?? '')}"><span class="mtt">${t.starred ? '★ ' : ''}${esc(t.title)} <small>${esc(t.project)}</small></span>${t.folder ? `<small class="mtf">📁 ${esc(t.folder)}</small>` : ''}</span>`).join('')}</div>` : ''}

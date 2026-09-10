@@ -1,5 +1,5 @@
 import type { Session, SessionStatus, Project, Worktree, MergeRequest, NightShift, Job, Todo } from '../../../shared/types.ts';
-import { attentionQueue } from './mini.ts';
+import { attentionQueue, inQueue, needsYou } from '../../../shared/attention.ts';
 
 export interface PanelEvents {
   onSelect: (id: string | null) => void;
@@ -191,7 +191,7 @@ export class Panel {
     this.empty.hidden = all.length > 0 || this.projects.length > 0;
 
     let groups = this.groups();
-    if (this.filter === 'attention') groups = groups.filter(g => g.sessions.some(s => ATTENTION.includes(s.status)));
+    if (this.filter === 'attention') groups = groups.filter(g => g.sessions.some(s => inQueue(s)));
 
     let n = 0;                          // číslování sezení
     let klidShown = 0, klidHidden = 0;
@@ -219,7 +219,7 @@ export class Panel {
         const idx = n++;
         const subs = s.subagents.map(a => `<li class="sub" title="${esc(a.description)}">└ ${esc(a.description)}</li>`).join('');
         return `
-          <li class="session ${s.status} ${this.sel?.kind === 'session' && this.sel.id === s.id ? 'selected' : ''}" data-id="${esc(s.id)}" title="${esc(s.cwd)}">
+          <li class="session ${s.status} ${s.status === 'completed' && !inQueue(s) ? 'seen' : ''} ${this.sel?.kind === 'session' && this.sel.id === s.id ? 'selected' : ''}" data-id="${esc(s.id)}" title="${esc(s.cwd)}">
             <div class="bar"></div>
             <div>
               <div class="name"><span>${idx < 9 ? `<kbd>${idx + 1}</kbd> ` : ''}${esc(s.title ?? s.name)}</span><span class="proj">${s.title ? esc(s.name) + (p ? '' : ' · ' + esc(s.project)) : (p ? '' : esc(s.project))}</span></div>
@@ -406,7 +406,7 @@ export class Panel {
     const prace = this.projects.filter(p => p.status === 'prace').length + this.projects.filter(p => p.status === 'dotaz').length;
     const dotaz = all.filter(s => s.status === 'permission').length;
     const parts = [`<span class="working"><b>${all.length}</b> ${plural(all.length, 'sezení', 'sezení', 'sezení')}</span>`];
-    const q = attentionQueue(all);
+    const q = attentionQueue(all).filter(needsYou);
     if (q.length) parts.push(`<span class="${q[0].status}">nejdéle čeká <b>${esc(q[0].title ?? q[0].name)}</b> (${esc(q[0].project)}) ${ago(q[0].statusSince)}</span>`);
     if (prace) parts.push(`<span class="completed"><b>${prace}</b> ${plural(prace, 'projekt', 'projekty', 'projektů')} v práci</span>`);
     if (dotaz) parts.push(`<span class="permission"><b>${dotaz}</b> ${plural(dotaz, 'dotaz', 'dotazy', 'dotazů')}</span>`);

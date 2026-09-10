@@ -1,5 +1,6 @@
 import type { Session, SessionStatus, NightShift } from '../../../shared/types.ts';
 import { renderPose, lookFor, type Pose } from '../game/sprites.ts';
+import { inQueue } from '../../../shared/attention.ts';
 
 /**
  * Everything that reaches you when the tab is not in front:
@@ -76,7 +77,7 @@ export class Attention {
   // ---- title + favicon --------------------------------------------------
   private groups() {
     const g: Record<string, Session[]> = { permission: [], error: [], waiting: [], completed: [] };
-    for (const s of this.sessions.values()) if (g[s.status]) g[s.status].push(s);
+    for (const s of this.sessions.values()) if (g[s.status] && inQueue(s)) g[s.status].push(s);
     return g;
   }
 

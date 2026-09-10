@@ -10,6 +10,7 @@ import { loadConfig } from './config.ts';
 import { Scanner } from './scanner.ts';
 import { NightScanner } from './nightScanner.ts';
 import { DesktopIndex, buildTodo } from './desktop.ts';
+import { attentionQueue, needsYou } from '../shared/attention.ts';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import type { Todo } from '../shared/types.ts';
 import { History, digest as buildDigest } from './history.ts';
@@ -41,7 +42,7 @@ function refreshTodo() {
   for (const res of clients) res.write(line);
 }
 const desktop = new DesktopIndex(undefined, () => { store.refreshDesktop(); refreshTodo(); });
-store.desktopResolver = id => { const d = desktop.lookup(id); return d ? { desktopId: d.desktopId, title: d.title } : undefined; };
+store.desktopResolver = id => { const d = desktop.lookup(id); return d ? { desktopId: d.desktopId, title: d.title, lastFocusedAt: d.lastFocusedAt } : undefined; };
 const night = new NightScanner(config, store, n => {
   const msg: ServerMessage = { type: 'night', night: n };
   const line = `data: ${JSON.stringify(msg)}\n\n`;
@@ -213,15 +214,14 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && path === '/api/widget') {
       const now = Date.now();
       const all = store.list();
-      const ATT: Record<string, number> = { permission: 0, error: 1, waiting: 2, completed: 3 };
-      const queue = all.filter(s => s.status in ATT).sort((a, b) => ATT[a.status] - ATT[b.status] || a.statusSince - b.statusSince)
+      const queue = attentionQueue(all, now)
         .map(s => ({ id: s.id, name: s.title ?? s.name, nick: s.title ? s.name : null, status: s.status, since: s.statusSince, project: s.project, folder: s.folder ?? null, message: s.message ?? null }));
       const working = scanner.projects.filter(p => p.status !== 'klid').map(p => ({ name: p.name, sessions: all.filter(s => s.projectId === p.id).length }));
       const jobs = night.night.jobs;
       const upcoming = jobs.filter(j => j.nextRunAt && j.nextRunAt > now).sort((a, b) => a.nextRunAt! - b.nextRunAt!)[0];
       const body = {
         at: now,
-        sessions: { total: all.length, working: all.filter(s => s.status === 'working').length, attention: queue.length },
+        sessions: { total: all.length, working: all.filter(s => s.status === 'working').length, attention: all.filter(needsYou).length },
         queue: queue.slice(0, 10),
         working,
         night: {
@@ -270,6 +270,7 @@ const server = http.createServer(async (req, res) => {
       const s = store.sessions.get(decodeURIComponent(focusMatch[1]));
       if (!s) return json(res, 404, { error: 'unknown session' });
       const result = await focusTerminal(s.terminal, s.desktopId, s.title);
+      store.markSeen(s.id);
       return json(res, 200, { ok: true, result });
     }
 

@@ -85,7 +85,7 @@ export class Store {
   /** cwd → Project.id; nastavuje skener projektů. */
   projectResolver?: (cwd: string) => string | undefined;
   /** CLI session id → název a id sezení v desktopové aplikaci. */
-  desktopResolver?: (cliSessionId: string) => { desktopId: string; title?: string } | undefined;
+  desktopResolver?: (cliSessionId: string) => { desktopId: string; title?: string; lastFocusedAt?: number } | undefined;
   /** Volá se před odstraněním sezení (historie). */
   onSessionEnd?: (s: Session, reason?: string) => void;
 
@@ -149,6 +149,7 @@ export class Store {
     if (s.status !== status) {
       s.status = status;
       s.statusSince = Date.now();
+      s.seen = false;
     }
   }
 
@@ -246,10 +247,7 @@ export class Store {
           s.message = msg || 'Potřebuje povolení';
           this.setStatus(s, 'permission');
         } else if (kind === 'idle_prompt' || /waiting for your input/i.test(msg)) {
-          if (s.status !== 'permission') {
-            s.message = msg || 'Čeká na tvou odpověď';
-            this.setStatus(s, 'waiting');
-          }
+          // po dokončeném tahu přichází vždy — není to otázka, stav nechat (hotovo zůstane hotovo)
         } else if (kind === 'elicitation_dialog' || kind === 'agent_needs_input') {
           s.message = msg || 'Potřebuje odpověď';
           this.setStatus(s, 'waiting');
@@ -299,9 +297,18 @@ export class Store {
   private applyDesktop(s: Session): boolean {
     const d = this.desktopResolver?.(s.id);
     if (!d) return false;
-    const changed = d.desktopId !== s.desktopId || d.title !== s.title;
+    // hotové sezení, které jsi po dokončení otevřel v aplikaci, už nečeká na tvou pozornost
+    const seen = s.status === 'completed' && !!d.lastFocusedAt && d.lastFocusedAt > s.statusSince;
+    const changed = d.desktopId !== s.desktopId || d.title !== s.title || (seen && !s.seen);
     s.desktopId = d.desktopId; s.title = d.title;
+    if (seen) s.seen = true;
     return changed;
+  }
+
+  /** Sezení otevřené z Kanclu (Enter, klik) — hotové se tím bere jako viděné. */
+  markSeen(id: string) {
+    const s = this.sessions.get(id);
+    if (s && s.status === 'completed' && !s.seen) { s.seen = true; this.broadcast({ type: 'upsert', session: s }); }
   }
 
   /** Doplní názvy z desktopové aplikace (po změně indexu). */
@@ -330,9 +337,6 @@ export class Store {
     const now = Date.now();
     for (const s of this.sessions.values()) {
       let changed = false;
-      if (s.status === 'completed' && now - s.statusSince > 3 * 60_000) {
-        this.setStatus(s, 'waiting'); changed = true;
-      }
       if (s.status === 'error' && now - s.statusSince > 20_000) {
         this.setStatus(s, 'working'); changed = true;
       }
