@@ -22,7 +22,13 @@ function esc(s: string) {
  *   otherwise  -> activate the app by bundle id / TERM_PROGRAM
  * Returns a short description of what it did.
  */
-export async function focusTerminal(t: TerminalInfo, desktopId?: string): Promise<string> {
+export async function focusTerminal(t: TerminalInfo, desktopId?: string, title?: string): Promise<string> {
+  // KanclBar (menu bar) umí přepnout sezení v aplikaci Claude přes Accessibility — když běží, pošleme mu název
+  if (desktopId && title) {
+    const q = new URLSearchParams({ title }).toString();
+    const ok = await run('open', ['-g', `kanclbar://focus?${q}`], { timeout: 3000 }).then(() => true).catch(() => false);
+    if (ok) return `aplikace Claude: přepínám na „${title}" (KanclBar)`;
+  }
   // Desktopová aplikace Claude: deep link claude://code/continue?session=local_… existuje v bundlu,
   // ale v aktuální verzi (1.46388) je za feature flagem a nic nedělá — posíláme ho pro případ, že se zapne,
   // a spolehlivě aspoň aktivujeme aplikaci. Název sezení dává klient do schránky.

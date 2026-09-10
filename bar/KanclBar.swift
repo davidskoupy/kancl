@@ -4,6 +4,7 @@
 // Klik na sezení = stejný fokus jako Enter v Kanclu. `KanclBar --once` vypíše stav do terminálu a skončí.
 
 import AppKit
+import ApplicationServices
 import Foundation
 import WebKit
 
@@ -65,8 +66,9 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
   out.append(("Kancl · \(w.sessions.total) sezení · \(w.sessions.working) pracuje", "head", nil))
   if w.queue.isEmpty { out.append(("nikdo tě nepotřebuje", "muted", nil)) }
   for q in w.queue.prefix(8) {
+    let proj = q.project.map { " [\($0)]" } ?? ""
     let nick = q.nick.map { " · \($0)" } ?? ""
-    out.append(("\(STATUS_ICON[q.status] ?? "•") \(q.name)\(nick) · \(STATUS_LABEL[q.status] ?? q.status) \(ago(q.since))", "session", q.id))
+    out.append(("\(STATUS_ICON[q.status] ?? "•") \(q.name)\(proj)\(nick) · \(STATUS_LABEL[q.status] ?? q.status) \(ago(q.since))", "session", q.id))
     if let m = q.message, !m.isEmpty { out.append(("      \(m.prefix(70))", "muted", nil)) }
   }
   if !w.working.isEmpty { out.append(("v práci: " + w.working.map { "\($0.name) (\($0.sessions))" }.joined(separator: ", "), "muted", nil)) }
@@ -200,6 +202,76 @@ final class SidePanel {
   func reload() { web.reload() }
 }
 
+// ---- přepnutí na sezení v aplikaci Claude přes Accessibility ----------------------
+// Deep link claude://code/continue je v aplikaci za feature flagem, tak hledáme položku
+// s názvem sezení v postranním panelu aplikace a „klikneme" na ni přes AX API.
+let CLAUDE_BUNDLE = "com.anthropic.claudefordesktop"
+
+func axString(_ el: AXUIElement, _ attr: String) -> String? {
+  var v: CFTypeRef?
+  guard AXUIElementCopyAttributeValue(el, attr as CFString, &v) == .success else { return nil }
+  return v as? String
+}
+func axChildren(_ el: AXUIElement) -> [AXUIElement] {
+  var v: CFTypeRef?
+  guard AXUIElementCopyAttributeValue(el, kAXChildrenAttribute as CFString, &v) == .success, let arr = v as? [AXUIElement] else { return [] }
+  return arr
+}
+
+/// Najde v AX stromu aplikace Claude prvek, jehož název/popis/hodnota se rovná (nebo obsahuje) `title`.
+func axFind(root: AXUIElement, title: String, maxNodes: Int = 20000) -> AXUIElement? {
+  let want = title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  var queue: [AXUIElement] = [root]
+  var seen = 0
+  var partial: AXUIElement?
+  while !queue.isEmpty && seen < maxNodes {
+    let el = queue.removeFirst(); seen += 1
+    let texts = [axString(el, kAXTitleAttribute as String), axString(el, kAXDescriptionAttribute as String), axString(el, kAXValueAttribute as String)]
+      .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty }
+    if texts.contains(want) { return el }
+    if partial == nil, texts.contains(where: { $0.hasPrefix(want) || $0.contains(want) }) { partial = el }
+    queue.append(contentsOf: axChildren(el))
+  }
+  return partial
+}
+
+/// Stiskne prvek; když sám nejde stisknout, zkusí rodiče (text v tlačítku/odkazu).
+func axPress(_ el: AXUIElement) -> Bool {
+  var cur: AXUIElement? = el
+  for _ in 0..<6 {
+    guard let c = cur else { break }
+    if AXUIElementPerformAction(c, kAXPressAction as CFString) == .success { return true }
+    var p: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(c, kAXParentAttribute as CFString, &p) == .success else { break }
+    cur = (p as! AXUIElement)
+  }
+  // poslední možnost: kliknout myší na střed prvku
+  var posRef: CFTypeRef?, sizeRef: CFTypeRef?
+  guard AXUIElementCopyAttributeValue(el, kAXPositionAttribute as CFString, &posRef) == .success,
+        AXUIElementCopyAttributeValue(el, kAXSizeAttribute as CFString, &sizeRef) == .success else { return false }
+  var pos = CGPoint.zero, size = CGSize.zero
+  AXValueGetValue(posRef as! AXValue, .cgPoint, &pos); AXValueGetValue(sizeRef as! AXValue, .cgSize, &size)
+  let pt = CGPoint(x: pos.x + size.width / 2, y: pos.y + size.height / 2)
+  guard let down = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: pt, mouseButton: .left),
+        let up = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: pt, mouseButton: .left) else { return false }
+  down.post(tap: .cghidEventTap); up.post(tap: .cghidEventTap)
+  return true
+}
+
+enum AXFocusResult { case ok, noPermission, appNotRunning, notFound }
+
+func axFocusSession(title: String) -> AXFocusResult {
+  let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+  guard AXIsProcessTrustedWithOptions(opts) else { return .noPermission }
+  guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: CLAUDE_BUNDLE).first else { return .appNotRunning }
+  app.activate(options: [])
+  let root = AXUIElementCreateApplication(app.processIdentifier)
+  // dáme aplikaci chvilku, aby byla vpředu, a hledáme
+  usleep(150_000)
+  guard let el = axFind(root: root, title: title) else { return .notFound }
+  return axPress(el) ? .ok : .notFound
+}
+
 final class Bar: NSObject {
   let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   let menu = NSMenu()
@@ -208,6 +280,7 @@ final class Bar: NSObject {
   var side: SidePanel?
 
   func start() {
+    NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleURL(_:with:)), forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
     item.autosaveName = "KanclBar"
     item.button?.title = "🕹"
     item.menu = menu
@@ -282,14 +355,34 @@ final class Bar: NSObject {
   }
 
   @objc func focus(_ sender: NSMenuItem) {
-    guard let id = sender.representedObject as? String,
-          let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+    guard let id = sender.representedObject as? String else { return }
+    if let s = last?.queue.first(where: { $0.id == id }), s.nick != nil {
+      // desktopové sezení (má název z aplikace): přepnout přes Accessibility
+      NSPasteboard.general.clearContents(); NSPasteboard.general.setString(s.name, forType: .string)
+      DispatchQueue.global().async { let r = axFocusSession(title: s.name); DispatchQueue.main.async { self.reportAX(r, title: s.name) } }
+      return
+    }
+    guard let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
           let url = URL(string: "\(base)/api/sessions/\(enc)/focus") else { return }
     var req = URLRequest(url: url); req.httpMethod = "POST"
     URLSession.shared.dataTask(with: req).resume()
-    if let s = last?.queue.first(where: { $0.id == id }) {
-      NSPasteboard.general.clearContents(); NSPasteboard.general.setString(s.name, forType: .string)
+  }
+
+  func reportAX(_ r: AXFocusResult, title: String) {
+    switch r {
+    case .ok: break
+    case .noPermission: item.button?.toolTip = "KanclBar potřebuje povolení Accessibility (Nastavení systému → Soukromí a zabezpečení → Přístupnost)"
+    case .appNotRunning: NSWorkspace.shared.open(URL(string: "claude://")!)
+    case .notFound: item.button?.toolTip = "Sezení „\(title)\" jsem v postranním panelu aplikace nenašel; název je ve schránce"
     }
+  }
+
+  /// kanclbar://focus?title=…  — můstek ze serveru Kanclu (Enter v prohlížeči, klik v panelu)
+  @objc func handleURL(_ event: NSAppleEventDescriptor, with reply: NSAppleEventDescriptor) {
+    guard let str = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+          let url = URLComponents(string: str), url.host == "focus",
+          let title = url.queryItems?.first(where: { $0.name == "title" })?.value, !title.isEmpty else { return }
+    DispatchQueue.global().async { let r = axFocusSession(title: title); DispatchQueue.main.async { self.reportAX(r, title: title) } }
   }
   @objc func openUrl(_ sender: NSMenuItem) { if let u = sender.representedObject as? String, let url = URL(string: u) { NSWorkspace.shared.open(url) } }
   @objc func openKancl() { NSWorkspace.shared.open(URL(string: base)!) }
@@ -299,6 +392,12 @@ final class Bar: NSObject {
 }
 
 // ---- vstup -----------------------------------------------------------------
+if let i = CommandLine.arguments.firstIndex(of: "--focus"), i + 1 < CommandLine.arguments.count {
+  let r = axFocusSession(title: CommandLine.arguments[i + 1])
+  print(r)
+  exit(r == .ok ? 0 : 1)
+}
+
 if CommandLine.arguments.contains("--once") {
   let sem = DispatchSemaphore(value: 0)
   fetchWidget { w in

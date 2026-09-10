@@ -43,7 +43,7 @@ export class Mini {
     const rows = queue.slice(0, 6).map(s => `
       <li class="mrow ${s.status}" data-id="${esc(s.id)}">
         <i></i>
-        <span class="mname">${esc(s.title ?? s.name)}${s.title ? `<small>${esc(s.name)}</small>` : ''}</span>
+        <span class="mname">${esc(s.title ?? s.name)}<small>${esc(s.project)}${s.title ? ' · ' + esc(s.name) : ''}</small></span>
         <span class="mst">${LABEL[s.status]}</span>
         <span class="mago">${ago(s.statusSince)}</span>
       </li>`).join('');

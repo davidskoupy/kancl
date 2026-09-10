@@ -375,7 +375,7 @@ export class Panel {
     const dotaz = all.filter(s => s.status === 'permission').length;
     const parts = [`<span class="working"><b>${all.length}</b> ${plural(all.length, 'sezení', 'sezení', 'sezení')}</span>`];
     const q = attentionQueue(all);
-    if (q.length) parts.push(`<span class="${q[0].status}">nejdéle čeká <b>${esc(q[0].title ?? q[0].name)}</b> ${ago(q[0].statusSince)}</span>`);
+    if (q.length) parts.push(`<span class="${q[0].status}">nejdéle čeká <b>${esc(q[0].title ?? q[0].name)}</b> (${esc(q[0].project)}) ${ago(q[0].statusSince)}</span>`);
     if (prace) parts.push(`<span class="completed"><b>${prace}</b> ${plural(prace, 'projekt', 'projekty', 'projektů')} v práci</span>`);
     if (dotaz) parts.push(`<span class="permission"><b>${dotaz}</b> ${plural(dotaz, 'dotaz', 'dotazy', 'dotazů')}</span>`);
     const err = all.filter(s => s.status === 'error').length;

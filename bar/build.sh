@@ -20,6 +20,7 @@ cat > "$APP/Contents/Info.plist" <<'PL'
   <key>LSUIElement</key><true/>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>cz.skoupy.kanclbar</string><key>CFBundleURLSchemes</key><array><string>kanclbar</string></array></dict></array>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>
 PL

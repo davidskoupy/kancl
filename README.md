@@ -165,6 +165,15 @@ open bar/build/KanclBar.app             # spustí ikonu v menu baru
 `KanclBar — Autostart.command` ho zapne po přihlášení (a dalším dvojklikem vypne). Widget do Notification Center
 (WidgetKit) by potřeboval Xcode a obnovoval by se jen jednou za pár minut; menu bar je realtime.
 
+**Plovoucí panel u okraje obrazovky** (menu 🕹 → „Panel u okraje obrazovky"): živý mini režim, vždy nahoře, na všech
+plochách. Táhne se za horní lištu, `–` ho sbalí na proužek, `×` schová; v menu jsou rohy a průhlednost.
+
+**Proklik do sezení v aplikaci Claude.** Deep link aplikace zatím nefunguje, tak KanclBar najde sezení v postranním
+panelu aplikace přes Accessibility a klikne na něj. Při prvním použití si řekne o povolení: Nastavení systému →
+Soukromí a zabezpečení → Přístupnost → KanclBar. Ze serveru Kanclu (Enter v prohlížeči, klik v panelu) se to volá
+přes `kanclbar://focus?title=…`. Po každém přeložení KanclBaru (`bar/build.sh`) je potřeba povolení obnovit,
+protože ad-hoc podpis se mění.
+
 ## Kancl v mobilu (Tailscale)
 
 Kancl poslouchá jen na `127.0.0.1`. Když ho chceš v telefonu, pusť server na adrese tailnetu (nikdy `0.0.0.0`):

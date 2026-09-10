@@ -231,7 +231,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && focusMatch) {
       const s = store.sessions.get(decodeURIComponent(focusMatch[1]));
       if (!s) return json(res, 404, { error: 'unknown session' });
-      const result = await focusTerminal(s.terminal, s.desktopId);
+      const result = await focusTerminal(s.terminal, s.desktopId, s.title);
       return json(res, 200, { ok: true, result });
     }
 
