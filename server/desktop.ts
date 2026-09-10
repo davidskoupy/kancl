@@ -93,7 +93,7 @@ const TODO_WINDOW = 7 * 24 * 3600_000;
  * „K dokončení": neaktivní, nearchivované sezení, kde se něco stalo po posledním otevření (nebo nikdy otevřené),
  * do 7 dní zpět. Naplánované úlohy a právě běžící sezení (`liveCli`) se vynechají, odškrtnutá (`dismissed`) také.
  */
-export function buildTodo(sessions: DesktopSession[], now: number, liveCli: Set<string>, dismissed: Record<string, number>): Todo[] {
+export function buildTodo(sessions: DesktopSession[], now: number, liveCli: Set<string>, dismissed: Record<string, number>, projectName?: (cwd: string) => string | undefined): Todo[] {
   const out: Todo[] = [];
   for (const d of sessions) {
     if (d.isArchived || d.scheduled || !d.title || !d.lastActivityAt) continue;
@@ -105,7 +105,7 @@ export function buildTodo(sessions: DesktopSession[], now: number, liveCli: Set<
     if (dis && dis >= d.lastActivityAt) continue;
     out.push({
       desktopId: d.desktopId, cliSessionId: d.cliSessionId, title: d.title,
-      project: d.cwd ? basename(d.cwd) : '—', cwd: d.cwd,
+      project: d.cwd ? (projectName?.(d.cwd) ?? (d.cwd.includes('/scratch-workspaces/') ? 'bez projektu' : basename(d.cwd))) : '—', cwd: d.cwd,
       lastActivityAt: d.lastActivityAt, lastFocusedAt: d.lastFocusedAt,
       starred: d.starred, error: d.error, turns: d.turns,
     });

@@ -272,9 +272,20 @@ func axPress(_ el: AXUIElement) -> Bool {
 
 enum AXFocusResult { case ok, noPermission, appNotRunning, notFound }
 
+var axPromptShown = false
+var axAlertShown = false
 func axFocusSession(title: String) -> AXFocusResult {
-  let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-  guard AXIsProcessTrustedWithOptions(opts) else { return .noPermission }
+  // nejdřív tiše; systémový dialog nejvýš jednou za běh aplikace, jinak jen otevřít Nastavení systému
+  if !AXIsProcessTrusted() {
+    if !axPromptShown {
+      axPromptShown = true
+      let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+      _ = AXIsProcessTrustedWithOptions(opts)
+    } else {
+      NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+    }
+    return .noPermission
+  }
   guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: CLAUDE_BUNDLE).first else { return .appNotRunning }
   app.activate(options: [])
   let root = AXUIElementCreateApplication(app.processIdentifier)
@@ -345,12 +356,16 @@ final class Bar: NSObject {
   func hidePanel() { side?.hide(); UserDefaults.standard.set(false, forKey: "panelVisible") }
   @objc func togglePanel() { if side?.isVisible == true { hidePanel() } else { showPanel() } }
   @objc func reloadPanel() { side?.reload() }
+  @objc func openAX() { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!) }
   @objc func collapsePanel() { side?.toggleCollapse() }
   @objc func snapPanel(_ sender: NSMenuItem) { if let k = sender.representedObject as? String { side?.snap(k) } }
   @objc func alphaPanel(_ sender: NSMenuItem) { if let v = sender.representedObject as? Double { side?.setAlpha(v) } }
 
   func addFooter() {
     menu.addItem(.separator())
+    if !AXIsProcessTrusted() {
+      let ax = NSMenuItem(title: "⚠︎ Přístupnost není povolená → otevřít Nastavení", action: #selector(openAX), keyEquivalent: ""); ax.target = self; menu.addItem(ax)
+    }
     let p = NSMenuItem(title: "Panel u okraje obrazovky", action: #selector(togglePanel), keyEquivalent: "p"); p.target = self; p.state = side?.isVisible == true ? .on : .off; menu.addItem(p)
     if side?.isVisible == true {
       let c = NSMenuItem(title: side?.collapsed == true ? "Rozbalit panel" : "Sbalit panel na proužek", action: #selector(collapsePanel), keyEquivalent: "c"); c.target = self; menu.addItem(c)
@@ -391,7 +406,15 @@ final class Bar: NSObject {
   func reportAX(_ r: AXFocusResult, title: String) {
     switch r {
     case .ok: break
-    case .noPermission: item.button?.toolTip = "KanclBar potřebuje povolení Accessibility (Nastavení systému → Soukromí a zabezpečení → Přístupnost)"
+    case .noPermission:
+      item.button?.toolTip = "KanclBar potřebuje povolení Přístupnosti (Nastavení systému → Soukromí a zabezpečení → Přístupnost)"
+      if !axAlertShown {
+        axAlertShown = true
+        let a = NSAlert(); a.messageText = "KanclBar nemá povolení Přístupnosti"
+        a.informativeText = "Přepínání na sezení v aplikaci Claude potřebuje Přístupnost. V Nastavení systému → Soukromí a zabezpečení → Přístupnost zapni KanclBar (starý záznam smaž a přidej znovu z bar/build/KanclBar.app). Pak KanclBar ukonči z menu 🕹, LaunchAgent ho hned spustí znovu."
+        a.addButton(withTitle: "Otevřít Nastavení"); a.addButton(withTitle: "Zavřít")
+        if a.runModal() == .alertFirstButtonReturn { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!) }
+      }
     case .appNotRunning: NSWorkspace.shared.open(URL(string: "claude://")!)
     case .notFound: item.button?.toolTip = "Sezení „\(title)\" jsem v postranním panelu aplikace nenašel; název je ve schránce"
     }
