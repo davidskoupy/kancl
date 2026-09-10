@@ -19,7 +19,7 @@ else
 <plist version="1.0"><dict>
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key><array>
-    <string>$NODE_BIN/npx</string><string>tsx</string><string>$PWD/server/index.ts</string>
+    <string>/bin/bash</string><string>$PWD/bin/run-server.sh</string>
   </array>
   <key>WorkingDirectory</key><string>$PWD</string>
   <key>EnvironmentVariables</key><dict><key>PATH</key><string>$NODE_BIN:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>

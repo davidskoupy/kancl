@@ -24,5 +24,12 @@ cat > "$APP/Contents/Info.plist" <<'PL'
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>
 PL
-codesign --force --sign - "$APP" >/dev/null 2>&1 || true
+# stabilní identita (bar/make-identity.sh) → povolení Přístupnosti přežije přeložení; jinak ad hoc
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "KanclBar Dev"; then
+  codesign --force --sign "KanclBar Dev" --identifier cz.skoupy.kanclbar "$APP" 2>&1 | grep -v "replacing existing" || true
+  echo "podpis: KanclBar Dev"
+else
+  codesign --force --sign - "$APP" >/dev/null 2>&1 || true
+  echo "podpis: ad hoc (spusť bar/make-identity.sh, ať povolení Přístupnosti přežije další build)"
+fi
 echo "hotovo: $PWD/$APP"

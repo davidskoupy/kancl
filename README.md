@@ -172,6 +172,9 @@ bar/build/KanclBar.app/Contents/MacOS/KanclBar --once   # vypíše stav do termi
 open bar/build/KanclBar.app             # spustí ikonu v menu baru
 ```
 
+Po prvním přeložení spusť jednou `bash bar/make-identity.sh`: vytvoří lokální podpisovou identitu „KanclBar Dev",
+kterou `build.sh` dál používá, takže povolení Přístupnosti přežije další přeložení (ad hoc podpis by ho pokaždé shodil).
+
 `KanclBar — Autostart.command` ho zapne po přihlášení (a dalším dvojklikem vypne). Widget do Notification Center
 (WidgetKit) by potřeboval Xcode a obnovoval by se jen jednou za pár minut; menu bar je realtime.
 
@@ -249,6 +252,14 @@ claude ──hook──▶ hook/kancl-hook.sh ──POST /hook──▶ server (
 - **`shared/plan.ts`** rozděluje 12 stolů mezi projekty: aktivní dostanou počet sezení + 1 (nejvýš 4), klidné po jednom.
 - **`server/night.ts`** je čistá logika noční směny (cron, český rozvrh, parser runs.md, zásoba, stav), **`server/nightScanner.ts`** ji krmí ze souborů.
 - **`client/`** vykresluje kancelář v PixiJS. Všechny sprity se generují v kódu, žádné obrázky.
+
+## Pro agenty (skill `kancl`)
+
+`~/.claude/skills/kancl/SKILL.md` říká Claude sezením, jak se Kanclu zeptat (`/api/digest`, `/api/widget`, `/api/todo`)
+a jak výsledek podat v ranním briefu. Skill `/morning` si tak vezme noční směnu, CI a K dokončení sám.
+
+Logy LaunchAgentů (`~/.kancl/server.log`, `bar.log`) ořezávají spouštěče `bin/run-server.sh` a `bin/run-bar.sh`
+při každém startu na posledních 0,5 MB.
 
 ## Skripty
 

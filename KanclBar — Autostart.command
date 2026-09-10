@@ -19,7 +19,7 @@ else
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>$LABEL</string>
-  <key>ProgramArguments</key><array><string>$BIN</string></array>
+  <key>ProgramArguments</key><array><string>/bin/bash</string><string>$PWD/bin/run-bar.sh</string></array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>$HOME/.kancl/bar.log</string>
