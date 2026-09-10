@@ -85,36 +85,117 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
   return out
 }
 
-/// Plovoucí panel u pravého okraje obrazovky s živým mini režimem (?mini=1). Vždy nahoře, na všech plochách.
+/// Lišta nahoře na panelu: táhne se za ni, má sbalení (–) a schování (×).
+final class GrabBar: NSView {
+  let label = NSTextField(labelWithString: "Kancl")
+  let collapseBtn = NSButton(title: "–", target: nil, action: nil)
+  let closeBtn = NSButton(title: "×", target: nil, action: nil)
+  override init(frame: NSRect) {
+    super.init(frame: frame)
+    wantsLayer = true
+    layer?.backgroundColor = NSColor(calibratedRed: 0.09, green: 0.11, blue: 0.14, alpha: 1).cgColor
+    label.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
+    label.textColor = NSColor(calibratedRed: 0.9, green: 0.91, blue: 0.94, alpha: 1)
+    label.lineBreakMode = .byTruncatingTail
+    for b in [collapseBtn, closeBtn] {
+      b.isBordered = false; b.font = NSFont.systemFont(ofSize: 12, weight: .bold)
+      b.contentTintColor = NSColor(calibratedWhite: 0.7, alpha: 1)
+    }
+    addSubview(label); addSubview(collapseBtn); addSubview(closeBtn)
+  }
+  required init?(coder: NSCoder) { fatalError() }
+  override func layout() {
+    super.layout()
+    closeBtn.frame = NSRect(x: bounds.width - 22, y: 0, width: 20, height: bounds.height)
+    collapseBtn.frame = NSRect(x: bounds.width - 44, y: 0, width: 20, height: bounds.height)
+    label.frame = NSRect(x: 10, y: 3, width: bounds.width - 58, height: bounds.height - 6)
+  }
+  override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
+}
+
+/// Plovoucí panel u okraje obrazovky s živým mini režimem (?mini=1). Vždy nahoře, na všech plochách.
 final class SidePanel {
   let panel: NSPanel
   let web: WKWebView
+  let grab = GrabBar(frame: .zero)
+  let grabH: CGFloat = 24
+  var expandedHeight: CGFloat = 320
+  var collapsed = UserDefaults.standard.bool(forKey: "panelCollapsed")
 
   init() {
     let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
     let w: CGFloat = 340, h: CGFloat = 320
     let frame = NSRect(x: screen.maxX - w - 12, y: screen.maxY - h - 12, width: w, height: h)
-    panel = NSPanel(contentRect: frame, styleMask: [.titled, .closable, .resizable, .utilityWindow, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: false)
-    panel.title = "Kancl"
-    panel.titleVisibility = .hidden
-    panel.titlebarAppearsTransparent = true
-    panel.isMovableByWindowBackground = true
+    panel = NSPanel(contentRect: frame, styleMask: [.borderless, .resizable, .utilityWindow, .nonactivatingPanel], backing: .buffered, defer: false)
+    panel.isMovableByWindowBackground = false
     panel.level = .floating
     panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
     panel.hidesOnDeactivate = false
     panel.isReleasedWhenClosed = false
+    panel.hasShadow = true
+    panel.isOpaque = false
     panel.backgroundColor = NSColor(calibratedRed: 0.06, green: 0.07, blue: 0.09, alpha: 1)
+    panel.minSize = NSSize(width: 220, height: grabH)
+    panel.alphaValue = CGFloat(UserDefaults.standard.object(forKey: "panelAlpha") as? Double ?? 1.0)
     panel.setFrameAutosaveName("KanclPanel")
-    let cfg = WKWebViewConfiguration()
-    web = WKWebView(frame: panel.contentView!.bounds, configuration: cfg)
-    web.autoresizingMask = [.width, .height]
+    let content = NSView(frame: panel.contentView!.bounds)
+    content.wantsLayer = true
+    content.layer?.cornerRadius = 10
+    content.layer?.masksToBounds = true
+    panel.contentView = content
+    web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
     web.setValue(false, forKey: "drawsBackground")
-    panel.contentView!.addSubview(web)
+    content.addSubview(web)
+    content.addSubview(grab)
+    grab.collapseBtn.target = self; grab.collapseBtn.action = #selector(toggleCollapse)
+    grab.closeBtn.target = self; grab.closeBtn.action = #selector(hideFromButton)
     if let url = URL(string: base + "/?mini=1") { web.load(URLRequest(url: url)) }
+    expandedHeight = max(panel.frame.height, 120)
+    if collapsed { applyCollapsed(animate: false) }
+    NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: panel, queue: .main) { [weak self] _ in self?.relayout() }
+    relayout()
   }
 
+  func relayout() {
+    let b = panel.contentView!.bounds
+    grab.frame = NSRect(x: 0, y: b.height - grabH, width: b.width, height: grabH)
+    web.frame = NSRect(x: 0, y: 0, width: b.width, height: max(0, b.height - grabH))
+    web.isHidden = collapsed
+    grab.collapseBtn.title = collapsed ? "+" : "–"
+    if !collapsed && panel.frame.height > grabH + 10 { expandedHeight = panel.frame.height }
+  }
+
+  func setTitle(_ t: String) { grab.label.stringValue = t }
+
+  func applyCollapsed(animate: Bool) {
+    var f = panel.frame
+    let top = f.maxY
+    f.size.height = collapsed ? grabH : expandedHeight
+    f.origin.y = top - f.size.height
+    panel.setFrame(f, display: true, animate: animate)
+    relayout()
+  }
+
+  @objc func toggleCollapse() {
+    if !collapsed { expandedHeight = panel.frame.height }
+    collapsed.toggle()
+    UserDefaults.standard.set(collapsed, forKey: "panelCollapsed")
+    applyCollapsed(animate: true)
+  }
+  @objc func hideFromButton() { hide(); UserDefaults.standard.set(false, forKey: "panelVisible") }
+
+  func snap(_ corner: String) {
+    let s = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+    var f = panel.frame
+    let m: CGFloat = 12
+    f.origin.x = corner.hasSuffix("L") ? s.minX + m : s.maxX - f.width - m
+    f.origin.y = corner.hasPrefix("T") ? s.maxY - f.height - m : s.minY + m
+    panel.setFrame(f, display: true, animate: true)
+  }
+  func setAlpha(_ a: Double) { panel.alphaValue = CGFloat(a); UserDefaults.standard.set(a, forKey: "panelAlpha") }
+
   var isVisible: Bool { panel.isVisible }
-  func show() { panel.orderFrontRegardless() }
+  func show() { panel.orderFrontRegardless(); relayout() }
   func hide() { panel.orderOut(nil) }
   func reload() { web.reload() }
 }
@@ -143,12 +224,14 @@ final class Bar: NSObject {
     menu.removeAllItems()
     guard let w else {
       item.button?.title = "🕹✕"
+      side?.setTitle("Kancl neběží")
       menu.addItem(withTitle: "Kancl neběží (\(base))", action: nil, keyEquivalent: "")
       addFooter()
       return
     }
     last = w
     item.button?.title = barTitle(w)
+    side?.setTitle("Kancl · \(w.sessions.working)/\(w.sessions.total) pracuje" + (w.queue.isEmpty ? "" : " · \(w.queue.count) chce tě") + (w.night.fail > 0 ? " · 🌙✗\(w.night.fail)" : "") + (w.ci.isEmpty ? "" : " · CI✗\(w.ci.count)"))
     item.button?.toolTip = "Kancl · \(w.sessions.attention) chce tě"
     for l in lines(w) {
       if l.kind == "sep" { menu.addItem(.separator()); continue }
@@ -175,11 +258,23 @@ final class Bar: NSObject {
   func hidePanel() { side?.hide(); UserDefaults.standard.set(false, forKey: "panelVisible") }
   @objc func togglePanel() { if side?.isVisible == true { hidePanel() } else { showPanel() } }
   @objc func reloadPanel() { side?.reload() }
+  @objc func collapsePanel() { side?.toggleCollapse() }
+  @objc func snapPanel(_ sender: NSMenuItem) { if let k = sender.representedObject as? String { side?.snap(k) } }
+  @objc func alphaPanel(_ sender: NSMenuItem) { if let v = sender.representedObject as? Double { side?.setAlpha(v) } }
 
   func addFooter() {
     menu.addItem(.separator())
     let p = NSMenuItem(title: "Panel u okraje obrazovky", action: #selector(togglePanel), keyEquivalent: "p"); p.target = self; p.state = side?.isVisible == true ? .on : .off; menu.addItem(p)
-    if side?.isVisible == true { let r = NSMenuItem(title: "Obnovit panel", action: #selector(reloadPanel), keyEquivalent: ""); r.target = self; menu.addItem(r) }
+    if side?.isVisible == true {
+      let c = NSMenuItem(title: side?.collapsed == true ? "Rozbalit panel" : "Sbalit panel na proužek", action: #selector(collapsePanel), keyEquivalent: "c"); c.target = self; menu.addItem(c)
+      let pos = NSMenuItem(title: "Přesunout do rohu", action: nil, keyEquivalent: ""); let sub = NSMenu()
+      for (t, k) in [("vpravo nahoře", "TR"), ("vpravo dole", "BR"), ("vlevo nahoře", "TL"), ("vlevo dole", "BL")] { let i = NSMenuItem(title: t, action: #selector(snapPanel(_:)), keyEquivalent: ""); i.target = self; i.representedObject = k; sub.addItem(i) }
+      pos.submenu = sub; menu.addItem(pos)
+      let al = NSMenuItem(title: "Průhlednost", action: nil, keyEquivalent: ""); let asub = NSMenu()
+      for (t, v) in [("plná", 1.0), ("85 %", 0.85), ("70 %", 0.7), ("55 %", 0.55)] { let i = NSMenuItem(title: t, action: #selector(alphaPanel(_:)), keyEquivalent: ""); i.target = self; i.representedObject = v; if abs((side?.panel.alphaValue ?? 1) - v) < 0.01 { i.state = .on }; asub.addItem(i) }
+      al.submenu = asub; menu.addItem(al)
+      let r = NSMenuItem(title: "Obnovit panel", action: #selector(reloadPanel), keyEquivalent: ""); r.target = self; menu.addItem(r)
+    }
     let open = NSMenuItem(title: "Otevřít Kancl", action: #selector(openKancl), keyEquivalent: "o"); open.target = self; menu.addItem(open)
     let mini = NSMenuItem(title: "Mini režim", action: #selector(openMini), keyEquivalent: "m"); mini.target = self; menu.addItem(mini)
     let dig = NSMenuItem(title: "Co se stalo (ráno)", action: #selector(openDigest), keyEquivalent: "r"); dig.target = self; menu.addItem(dig)
