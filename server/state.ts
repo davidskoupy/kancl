@@ -1,6 +1,11 @@
 import { basename } from 'node:path';
 import type { Activity, Session, SessionStatus, TerminalInfo, ServerMessage } from '../shared/types.ts';
 import { NAMES } from '../shared/names.ts';
+import { folderInfo } from '../shared/folder.ts';
+import { homedir } from 'node:os';
+
+const HOME = homedir();
+function projectLabel(cwd: string) { const f = folderInfo(cwd, HOME); return { project: f.scratch ? 'bez projektu' : (f.repo ?? basename(cwd)), folder: f.folder }; }
 
 /** Payload z hook/kancl-hook.sh */
 export interface HookPayload {
@@ -114,7 +119,7 @@ export class Store {
       const { name, colorIndex } = this.pickName(id);
       s = {
         id, name, colorIndex, cwd,
-        project: cwd ? (cwd.includes('/scratch-workspaces/') ? 'bez projektu' : basename(cwd)) : 'unknown',
+        ...(cwd ? projectLabel(cwd) : { project: 'unknown', folder: '—' }),
         status: 'idle', statusSince: now, activity: 'think',
         terminal: {}, startedAt: now, lastSeen: now,
         turns: 0, toolCalls: 0, subagents: [], events: [],
@@ -124,7 +129,7 @@ export class Store {
       this.sessions.set(id, s);
     }
     if (typeof hook.cwd === 'string' && hook.cwd !== s.cwd) {
-      s.cwd = hook.cwd; s.project = hook.cwd.includes('/scratch-workspaces/') ? 'bez projektu' : basename(hook.cwd);
+      s.cwd = hook.cwd; Object.assign(s, projectLabel(hook.cwd));
       s.projectId = this.projectResolver?.(s.cwd);
     }
     if (typeof hook.transcript_path === 'string') s.transcriptPath = hook.transcript_path;

@@ -8,13 +8,13 @@ import ApplicationServices
 import Foundation
 import WebKit
 
-struct WQueue: Decodable { let id: String; let name: String; let nick: String?; let status: String; let since: Double; let project: String?; let message: String? }
+struct WQueue: Decodable { let id: String; let name: String; let nick: String?; let status: String; let since: Double; let project: String?; let folder: String?; let message: String? }
 struct WNight: Decodable { let ok: Int; let fail: Int; let running: Int; let sleeping: Int; let snapshotAt: Double?; let snapshotOld: Bool; let nextName: String?; let nextAt: Double? }
 struct WCi: Decodable { let project: String; let name: String?; let url: String? }
 struct WStock: Decodable { let project: String; let pending: Int; let alarm: Bool }
 struct WSessions: Decodable { let total: Int; let working: Int; let attention: Int }
 struct WProject: Decodable { let name: String; let sessions: Int }
-struct WTodo: Decodable { let id: String; let title: String; let project: String; let at: Double; let starred: Bool; let error: String? }
+struct WTodo: Decodable { let id: String; let title: String; let project: String; let folder: String?; let at: Double; let starred: Bool; let error: String? }
 struct Widget: Decodable {
   let at: Double
   let sessions: WSessions
@@ -73,6 +73,7 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
     let proj = q.project.map { " [\($0)]" } ?? ""
     let nick = q.nick.map { " · \($0)" } ?? ""
     out.append(("\(STATUS_ICON[q.status] ?? "•") \(q.name)\(proj)\(nick) · \(STATUS_LABEL[q.status] ?? q.status) \(ago(q.since))", "session", q.id))
+    if let f = q.folder, !f.isEmpty { out.append(("      📁 \(f)", "muted", nil)) }
     if let m = q.message, !m.isEmpty { out.append(("      \(m.prefix(70))", "muted", nil)) }
   }
   if !w.working.isEmpty { out.append(("v práci: " + w.working.map { "\($0.name) (\($0.sessions))" }.joined(separator: ", "), "muted", nil)) }
@@ -82,6 +83,7 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
     for t in w.todo {
       let mark = t.error != nil ? "‼️" : t.starred ? "★" : "📥"
       out.append(("\(mark) \(t.title) [\(t.project)] · \(ago(t.at))", "todo", t.title))
+      if let f = t.folder, !f.isEmpty { out.append(("      📁 \(f)", "muted", nil)) }
     }
   }
   out.append(("—", "sep", nil))

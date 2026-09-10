@@ -224,6 +224,7 @@ export class Panel {
             <div>
               <div class="name"><span>${idx < 9 ? `<kbd>${idx + 1}</kbd> ` : ''}${esc(s.title ?? s.name)}</span><span class="proj">${s.title ? esc(s.name) + (p ? '' : ' · ' + esc(s.project)) : (p ? '' : esc(s.project))}</span></div>
               <div class="detail">${esc(s.status === 'working' ? (s.lastDetail ?? s.prompt ?? 'přemýšlí…') : (s.message ?? s.lastDetail ?? s.prompt ?? ''))}</div>
+              ${s.folder ? `<div class="folder" title="${esc(s.cwd)}">📁 ${esc(s.folder)}</div>` : ''}
             </div>
             <div>
               <div class="status ${s.status}">${LABEL[s.status]}</div>
@@ -298,6 +299,7 @@ export class Panel {
         <div>
           <div class="name"><span>${t.starred ? '★ ' : ''}${esc(t.title)}</span><span class="proj">${esc(t.project)}</span></div>
           <div class="detail">${t.error ? `<span class="status error">chyba</span> ${esc(t.error)}` : `${t.lastFocusedAt ? 'nová aktivita' : 'neotevřeno'} · ${dayClock(t.lastActivityAt)}${t.turns ? ` · ${t.turns} ${plural(t.turns, 'tah', 'tahy', 'tahů')}` : ''}`}</div>
+          ${t.folder ? `<div class="folder">📁 ${esc(t.folder)}</div>` : ''}
         </div>
         <button class="tdone" data-tdone="${esc(t.desktopId)}" title="odškrtnout (v Kanclu, aplikace se nemění)">✓</button>
       </li>`).join('');
@@ -489,7 +491,7 @@ export class Panel {
         <span>Stav už</span><b data-since="${s.statusSince}">${ago(s.statusSince)}</b>
         <span>Úkol</span><b title="${esc(s.prompt ?? '')}">${esc(s.prompt ?? '—')}</b>
         <span>Nástroj</span><b title="${esc(s.lastDetail ?? '')}">${esc(s.lastDetail ?? '—')}</b>
-        <span>Složka</span><b title="${esc(s.cwd)}">${esc(s.cwd)}</b>
+        <span>Složka</span><b title="${esc(s.cwd)}">${esc(s.folder ?? s.cwd)}</b>
         <span>Terminál</span><b>${esc(term)}${s.terminal.tty ? ' · ' + esc(s.terminal.tty.replace('/dev/', '')) : ''}</b>
         <span>Tahy / nástroje</span><b>${s.turns} / ${s.toolCalls}</b>
         <span>Subagenti</span><b>${s.subagents.length ? s.subagents.map(a => esc(a.description)).join(', ') : '—'}</b>

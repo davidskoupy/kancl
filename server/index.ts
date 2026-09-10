@@ -215,7 +215,7 @@ const server = http.createServer(async (req, res) => {
       const all = store.list();
       const ATT: Record<string, number> = { permission: 0, error: 1, waiting: 2, completed: 3 };
       const queue = all.filter(s => s.status in ATT).sort((a, b) => ATT[a.status] - ATT[b.status] || a.statusSince - b.statusSince)
-        .map(s => ({ id: s.id, name: s.title ?? s.name, nick: s.title ? s.name : null, status: s.status, since: s.statusSince, project: s.project, message: s.message ?? null }));
+        .map(s => ({ id: s.id, name: s.title ?? s.name, nick: s.title ? s.name : null, status: s.status, since: s.statusSince, project: s.project, folder: s.folder ?? null, message: s.message ?? null }));
       const working = scanner.projects.filter(p => p.status !== 'klid').map(p => ({ name: p.name, sessions: all.filter(s => s.projectId === p.id).length }));
       const jobs = night.night.jobs;
       const upcoming = jobs.filter(j => j.nextRunAt && j.nextRunAt > now).sort((a, b) => a.nextRunAt! - b.nextRunAt!)[0];
@@ -232,7 +232,7 @@ const server = http.createServer(async (req, res) => {
         },
         ci: scanner.projects.filter(p => p.ci?.status === 'fail').map(p => ({ project: p.name, name: p.ci!.name ?? null, url: p.ci!.url ?? null })),
         stock: night.night.stock?.items ?? [],
-        todo: todo.slice(0, 8).map(t => ({ id: t.desktopId, title: t.title, project: t.project, at: t.lastActivityAt, starred: t.starred, error: t.error ?? null })),
+        todo: todo.slice(0, 8).map(t => ({ id: t.desktopId, title: t.title, project: t.project, folder: t.folder ?? null, at: t.lastActivityAt, starred: t.starred, error: t.error ?? null })),
         todoCount: todo.length,
       };
       return json(res, 200, body);

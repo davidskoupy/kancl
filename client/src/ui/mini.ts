@@ -46,7 +46,7 @@ export class Mini {
     const rows = queue.slice(0, 6).map(s => `
       <li class="mrow ${s.status}" data-id="${esc(s.id)}">
         <i></i>
-        <span class="mname">${esc(s.title ?? s.name)}<small>${esc(s.project)}${s.title ? ' · ' + esc(s.name) : ''}</small></span>
+        <span class="mname">${esc(s.title ?? s.name)}<small>${esc(s.project)}${s.title ? ' · ' + esc(s.name) : ''}</small>${s.folder ? `<small class="mfolder">📁 ${esc(s.folder)}</small>` : ''}</span>
         <span class="mst">${LABEL[s.status]}</span>
         <span class="mago">${ago(s.statusSince)}</span>
       </li>`).join('');
@@ -56,7 +56,7 @@ export class Mini {
         <span>${all.length} sezení · ${working} pracuje${queue.length ? ` · <em>${queue.length} chce tě</em>` : ''}</span>
       </div>
       <ul class="mlist">${rows || '<li class="mempty">nikdo tě nepotřebuje</li>'}</ul>
-      ${this.todo.length ? `<div class="mtodo"><span class="mk">k dokončení ${this.todo.length}</span>${this.todo.slice(0, 3).map(t => `<span class="mt" data-tid="${esc(t.desktopId)}">${t.starred ? '★ ' : ''}${esc(t.title)} <small>${esc(t.project)}</small></span>`).join('')}</div>` : ''}
+      ${this.todo.length ? `<div class="mtodo"><span class="mk">k dokončení ${this.todo.length}</span>${this.todo.slice(0, 3).map(t => `<span class="mt" data-tid="${esc(t.desktopId)}" title="${esc(t.folder ?? '')}">${t.starred ? '★ ' : ''}${esc(t.title)} <small>${esc(t.project)}${t.folder ? ' · 📁 ' + esc(t.folder) : ''}</small></span>`).join('')}</div>` : ''}
       <div class="mfoot ${jobsErr ? 'err' : ''}">
         noční směna: ${jobsOk} ✓${jobsErr ? ` · <b>${jobsErr} ✗</b>` : ''}${snapOld ? ' · <span class="old">cloud zastaralý</span>' : ''}
       </div>`;

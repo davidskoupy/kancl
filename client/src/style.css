@@ -240,3 +240,7 @@ body.digest #app { display: none; }
 .mtodo .mt { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mtodo .mt small { color: var(--muted); }
 .mtodo .mt:hover { color: var(--accent); }
+
+/* ---- složka ---- */
+.session .folder, .todo .folder { color: var(--muted); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px; margin-top: 1px; opacity: .85; }
+.mname small.mfolder { opacity: .8; }

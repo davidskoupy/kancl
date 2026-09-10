@@ -121,6 +121,7 @@ export interface Todo {
   cliSessionId?: string;
   title: string;
   project: string;         // název složky
+  folder?: string;         // čitelná složka
   cwd?: string;
   lastActivityAt: number;
   lastFocusedAt?: number;
@@ -141,6 +142,7 @@ export interface Session {
   colorIndex: number;
   cwd: string;
   project: string;          // název složky (basename cwd)
+  folder?: string;          // čitelná složka sezení (~/Code/x › worktree)
   title?: string;           // název sezení z desktopové aplikace Claude
   desktopId?: string;       // local_… pro deep link claude://code/continue?session=
   projectId?: string;       // Project.id, pokud cwd leží v naskenovaném projektu

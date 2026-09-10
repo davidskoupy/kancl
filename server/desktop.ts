@@ -85,7 +85,7 @@ export class DesktopIndex {
 }
 
 import type { Todo } from '../shared/types.ts';
-import { basename } from 'node:path';
+import { folderInfo } from '../shared/folder.ts';
 
 const TODO_WINDOW = 7 * 24 * 3600_000;
 
@@ -105,7 +105,7 @@ export function buildTodo(sessions: DesktopSession[], now: number, liveCli: Set<
     if (dis && dis >= d.lastActivityAt) continue;
     out.push({
       desktopId: d.desktopId, cliSessionId: d.cliSessionId, title: d.title,
-      project: d.cwd ? (projectName?.(d.cwd) ?? (d.cwd.includes('/scratch-workspaces/') ? 'bez projektu' : basename(d.cwd))) : '—', cwd: d.cwd,
+      ...(() => { if (!d.cwd) return { project: '—', folder: '—' }; const f = folderInfo(d.cwd, homedir()); return { project: projectName?.(d.cwd) ?? (f.scratch ? 'bez projektu' : (f.repo ?? '—')), folder: f.folder }; })(), cwd: d.cwd,
       lastActivityAt: d.lastActivityAt, lastFocusedAt: d.lastFocusedAt,
       starred: d.starred, error: d.error, turns: d.turns,
     });
