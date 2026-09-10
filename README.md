@@ -134,6 +134,16 @@ a dá název sezení do schránky. Deep link `claude://code/continue?session=…
 - `?digest=1` — ranní přehled: co se stalo od včerejška (skončená sezení, noční směna, CI selhání, zásoba témat,
   kdo teď čeká). Data jsou i na `GET /api/digest?since=<ms>` (pro skill `/morning`).
 
+## K dokončení (nepřečtená sezení)
+
+Aplikace Claude si u každého sezení ukládá čas poslední aktivity a čas, kdy jsi ho naposledy otevřel. Kancl z toho
+dělá seznam **K dokončení**: sezení, kde se něco stalo po tvém posledním otevření (nebo jsi ho ještě neotevřel),
+do 7 dní zpět, bez naplánovaných úloh a bez právě běžících sezení. Hvězdička z aplikace řadí nahoru, sezení s chybou
+je červené. Klik = přepnutí do aplikace (přes KanclBar), ✓ = odškrtnout v Kanclu (aplikace se nemění; když se v sezení
+znovu něco stane, vrátí se). Seznam je v panelu, v mini režimu, v menu baru (`📥N`) a na `GET /api/todo`.
+
+Běžné chaty claude.ai (mimo Claude Code) Kancl nevidí: nejsou na disku a API by chtělo token.
+
 ## Zdraví projektu
 
 - **GitHub Actions**: u GitHub projektů poslední 3 běhy (`gh run list`), v panelu `CI ✗` / `CI …`, v detailu odkazy.

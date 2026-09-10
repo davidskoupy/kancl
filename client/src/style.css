@@ -221,3 +221,22 @@ body.digest #app { display: none; }
 .digest-root li.permission b { color: var(--permission); } .digest-root li.error b { color: var(--error); } .digest-root li.ok .dt { color: var(--completed); }
 .digest-root button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; font-size: 11px; cursor: pointer; }
 .digest-root a { color: var(--accent); }
+
+/* ---- k dokončení ---- */
+.todohead { color: var(--completed); }
+.todo { display: grid; grid-template-columns: 8px 1fr auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+.todo:hover { background: var(--panel-2); }
+.todo .tdot { width: 8px; height: 8px; border-radius: 50%; background: var(--completed); }
+.todo.err .tdot { background: var(--error); }
+.todo.star .tdot { background: var(--permission); }
+.todo .name { font-weight: 600; display: flex; gap: 6px; align-items: baseline; }
+.todo .name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo .name .proj { color: var(--muted); font-weight: 400; font-size: 11px; white-space: nowrap; }
+.todo .detail { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; margin-top: 2px; }
+.tdone { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; width: 22px; height: 22px; cursor: pointer; font-size: 12px; opacity: 0; }
+.todo:hover .tdone { opacity: 1; } .tdone:hover { color: var(--completed); border-color: var(--completed); }
+.mtodo { border-top: 1px solid var(--line); padding: 6px 0 2px; display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+.mtodo .mk { color: var(--completed); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
+.mtodo .mt { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mtodo .mt small { color: var(--muted); }
+.mtodo .mt:hover { color: var(--accent); }

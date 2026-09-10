@@ -1,4 +1,4 @@
-import type { Session, ServerMessage, Project, NightShift } from '../../shared/types.ts';
+import type { Session, ServerMessage, Project, NightShift, Todo } from '../../shared/types.ts';
 
 export type ConnState = 'connecting' | 'ok' | 'error' | 'demo';
 
@@ -8,12 +8,14 @@ export interface ClientEvents {
   onState: (state: ConnState) => void;
   onProjects: (projects: Project[]) => void;
   onNight: (night: NightShift) => void;
+  onTodo: (todo: Todo[]) => void;
 }
 
 export class KanclClient {
   sessions = new Map<string, Session>();
   projects: Project[] = [];
   night: NightShift = { jobs: [], cloudSessions: [], scannedAt: 0 };
+  todo: Todo[] = [];
   state: ConnState = 'connecting';
   private es?: EventSource;
 
@@ -46,8 +48,14 @@ export class KanclClient {
         this.events.onProjects(this.projects);
         this.night = msg.night ?? { jobs: [], cloudSessions: [], scannedAt: 0 };
         this.events.onNight(this.night);
+        this.todo = msg.todo ?? [];
+        this.events.onTodo(this.todo);
         break;
       }
+      case 'todo':
+        this.todo = msg.todo;
+        this.events.onTodo(this.todo);
+        break;
       case 'night':
         this.night = msg.night;
         this.events.onNight(this.night);
@@ -72,6 +80,18 @@ export class KanclClient {
     const r = await fetch(`/api/sessions/${encodeURIComponent(id)}/focus`, { method: 'POST' });
     const j = await r.json().catch(() => ({}));
     return j.result ?? j.error ?? 'done';
+  }
+
+  async todoFocus(id: string): Promise<string> {
+    if (this.state === 'demo') return 'demo: tady bych otevřel sezení';
+    const r = await fetch(`/api/todo/${encodeURIComponent(id)}/focus`, { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    return j.result ?? j.error ?? 'done';
+  }
+
+  async todoDismiss(id: string) {
+    if (this.state === 'demo') { this.todo = this.todo.filter(t => t.desktopId !== id); this.events.onTodo(this.todo); return; }
+    await fetch(`/api/todo/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
   }
 
   async openFile(path: string): Promise<string> {
@@ -185,6 +205,12 @@ export class KanclClient {
       scannedAt: Date.now(),
     };
     this.events.onNight(this.night);
+    this.todo = [
+      { desktopId: 'local_t1', title: 'Aktualizovat článek o konci de minimis', project: 'affiliate', lastActivityAt: now - 2 * 3600_000, lastFocusedAt: now - 5 * 3600_000, starred: true, turns: 14 },
+      { desktopId: 'local_t2', title: 'Nové tickety v ticket.shean.dev', project: 'ppc-prirucka', lastActivityAt: now - 26 * 3600_000, starred: false, turns: 3 },
+      { desktopId: 'local_t3', title: 'Rozhraní registrací a administrace', project: 'registration-admin', lastActivityAt: now - 30 * 3600_000, lastFocusedAt: now - 31 * 3600_000, starred: false, error: 'Bash selhal: exit code 1', turns: 22 },
+    ];
+    this.events.onTodo(this.todo);
 
     const acts: Session['activity'][] = ['build', 'chop', 'run', 'lift', 'think'];
     const tools: Record<string, [string, string]> = {

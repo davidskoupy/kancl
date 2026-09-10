@@ -1,4 +1,4 @@
-import type { Session, SessionStatus, Project, Worktree, MergeRequest, NightShift, Job } from '../../../shared/types.ts';
+import type { Session, SessionStatus, Project, Worktree, MergeRequest, NightShift, Job, Todo } from '../../../shared/types.ts';
 import { attentionQueue } from './mini.ts';
 
 export interface PanelEvents {
@@ -8,6 +8,8 @@ export interface PanelEvents {
   onHover: (id: string | null) => void;
   onDemo: () => void;
   onOpenFile: (path: string) => void;
+  onTodoFocus: (id: string) => void;
+  onTodoDismiss: (id: string) => void;
 }
 
 type Sel = { kind: 'session' | 'project' | 'job'; id: string } | null;
@@ -72,6 +74,8 @@ export class Panel {
   private sessions = new Map<string, Session>();
   private projects: Project[] = [];
   private night: NightShift = { jobs: [], cloudSessions: [], scannedAt: 0 };
+  private todo: Todo[] = [];
+  private showAllTodo = false;
   private sel: Sel = null;
   private filter: 'all' | 'attention' = (localStorage.getItem('kancl.filter') as any) || 'all';
   private showAllKlid = localStorage.getItem('kancl.showAllKlid') === '1';
@@ -122,6 +126,7 @@ export class Panel {
 
   setProjects(projects: Project[]) { this.projects = projects; this.render(); }
   setNight(n: NightShift) { this.night = n; this.render(); }
+  setTodo(t: Todo[]) { this.todo = t; this.render(); }
   selectJob(id: string) {
     this.events.onSelect(null);
     this.sel = { kind: 'job', id };
@@ -239,8 +244,12 @@ export class Panel {
     }
     if (klidHidden) html.push(`<li class="more" data-more="1">+ ${klidHidden} ${plural(klidHidden, 'další', 'další', 'dalších')}</li>`);
     else if (this.showAllKlid && klidShown > KLID_VISIBLE) html.push(`<li class="more" data-more="0">sbalit</li>`);
+    html.push(this.renderTodo());
     html.push(this.renderNight());
     this.list.innerHTML = html.join('');
+    this.list.querySelectorAll<HTMLElement>('.todo').forEach(li => li.addEventListener('click', () => this.events.onTodoFocus(li.dataset.tid!)));
+    this.list.querySelectorAll<HTMLElement>('[data-tdone]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); this.events.onTodoDismiss(b.dataset.tdone!); }));
+    this.list.querySelector<HTMLElement>('[data-tmore]')?.addEventListener('click', () => { this.showAllTodo = !this.showAllTodo; this.render(); });
     this.list.querySelectorAll<HTMLElement>('.job').forEach(li => li.addEventListener('click', () => this.selectJob(li.dataset.jid!)));
 
     this.list.querySelectorAll<HTMLLIElement>('.session').forEach(li => {
@@ -273,6 +282,27 @@ export class Panel {
 
     this.renderSummary(all);
     this.renderDetails();
+  }
+
+  private renderTodo(): string {
+    const q = this.query;
+    let items = this.todo;
+    if (q) items = items.filter(t => `${t.title} ${t.project}`.toLowerCase().includes(q));
+    if (this.filter === 'attention') items = items.filter(t => t.error || t.starred);
+    if (!items.length) return '';
+    const LIMIT = 6;
+    const shown = this.showAllTodo || q ? items : items.slice(0, LIMIT);
+    const rows = shown.map(t => `
+      <li class="todo ${t.error ? 'err' : ''} ${t.starred ? 'star' : ''}" data-tid="${esc(t.desktopId)}" title="${esc(t.cwd ?? '')}${t.error ? '\n' + esc(t.error) : ''}">
+        <i class="tdot"></i>
+        <div>
+          <div class="name"><span>${t.starred ? '★ ' : ''}${esc(t.title)}</span><span class="proj">${esc(t.project)}</span></div>
+          <div class="detail">${t.error ? `<span class="status error">chyba</span> ${esc(t.error)}` : `${t.lastFocusedAt ? 'nová aktivita' : 'neotevřeno'} · ${dayClock(t.lastActivityAt)}${t.turns ? ` · ${t.turns} ${plural(t.turns, 'tah', 'tahy', 'tahů')}` : ''}`}</div>
+        </div>
+        <button class="tdone" data-tdone="${esc(t.desktopId)}" title="odškrtnout (v Kanclu, aplikace se nemění)">✓</button>
+      </li>`).join('');
+    const more = items.length > LIMIT && !q ? `<li class="more" data-tmore="1">${this.showAllTodo ? 'sbalit' : `+ ${items.length - LIMIT} ${plural(items.length - LIMIT, 'další', 'další', 'dalších')}`}</li>` : '';
+    return `<li class="nhead todohead"><span>K dokončení</span><span class="muted">${items.length} ${plural(items.length, 'sezení', 'sezení', 'sezení')} s neviděnou aktivitou</span></li>${rows}${more}`;
   }
 
   private renderNight(): string {

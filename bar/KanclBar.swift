@@ -14,6 +14,7 @@ struct WCi: Decodable { let project: String; let name: String?; let url: String?
 struct WStock: Decodable { let project: String; let pending: Int; let alarm: Bool }
 struct WSessions: Decodable { let total: Int; let working: Int; let attention: Int }
 struct WProject: Decodable { let name: String; let sessions: Int }
+struct WTodo: Decodable { let id: String; let title: String; let project: String; let at: Double; let starred: Bool; let error: String? }
 struct Widget: Decodable {
   let at: Double
   let sessions: WSessions
@@ -22,6 +23,8 @@ struct Widget: Decodable {
   let night: WNight
   let ci: [WCi]
   let stock: [WStock]
+  let todo: [WTodo]
+  let todoCount: Int
 }
 
 let base = ProcessInfo.processInfo.environment["KANCL_URL"] ?? "http://127.0.0.1:4242"
@@ -57,6 +60,7 @@ func barTitle(_ w: Widget) -> String {
   let count = { (st: String) in w.queue.filter { $0.status == st }.count }
   for st in ["permission", "error", "waiting"] { let n = count(st); if n > 0 { parts.append("\(STATUS_ICON[st]!)\(n)") } }
   if w.night.fail > 0 || !w.ci.isEmpty || w.stock.contains(where: { $0.alarm }) { parts.append("⚠︎") }
+  if w.todoCount > 0 { parts.append("📥\(w.todoCount)") }
   return parts.isEmpty ? "🕹" : "🕹" + parts.joined(separator: "")
 }
 
@@ -72,6 +76,14 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
     if let m = q.message, !m.isEmpty { out.append(("      \(m.prefix(70))", "muted", nil)) }
   }
   if !w.working.isEmpty { out.append(("v práci: " + w.working.map { "\($0.name) (\($0.sessions))" }.joined(separator: ", "), "muted", nil)) }
+  if !w.todo.isEmpty {
+    out.append(("—", "sep", nil))
+    out.append(("K dokončení · \(w.todoCount)", "head", nil))
+    for t in w.todo {
+      let mark = t.error != nil ? "‼️" : t.starred ? "★" : "📥"
+      out.append(("\(mark) \(t.title) [\(t.project)] · \(ago(t.at))", "todo", t.title))
+    }
+  }
   out.append(("—", "sep", nil))
   var night = "🌙 noční směna: \(w.night.ok) ✓"
   if w.night.fail > 0 { night += " · \(w.night.fail) ✗" }
@@ -312,6 +324,8 @@ final class Bar: NSObject {
       switch l.kind {
       case "session":
         mi.action = #selector(focus(_:)); mi.target = self; mi.representedObject = l.ref
+      case "todo":
+        mi.action = #selector(focusTodo(_:)); mi.target = self; mi.representedObject = l.ref
       case "ci":
         if let u = l.ref { mi.action = #selector(openUrl(_:)); mi.target = self; mi.representedObject = u }
       case "head":
@@ -366,6 +380,12 @@ final class Bar: NSObject {
           let url = URL(string: "\(base)/api/sessions/\(enc)/focus") else { return }
     var req = URLRequest(url: url); req.httpMethod = "POST"
     URLSession.shared.dataTask(with: req).resume()
+  }
+
+  @objc func focusTodo(_ sender: NSMenuItem) {
+    guard let title = sender.representedObject as? String else { return }
+    NSPasteboard.general.clearContents(); NSPasteboard.general.setString(title, forType: .string)
+    DispatchQueue.global().async { let r = axFocusSession(title: title); DispatchQueue.main.async { self.reportAX(r, title: title) } }
   }
 
   func reportAX(_ r: AXFocusResult, title: String) {

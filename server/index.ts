@@ -9,7 +9,9 @@ import { focusTerminal } from './focus.ts';
 import { loadConfig } from './config.ts';
 import { Scanner } from './scanner.ts';
 import { NightScanner } from './nightScanner.ts';
-import { DesktopIndex } from './desktop.ts';
+import { DesktopIndex, buildTodo } from './desktop.ts';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import type { Todo } from '../shared/types.ts';
 import { History, digest as buildDigest } from './history.ts';
 import { expandHome } from './config.ts';
 import type { ServerMessage } from '../shared/types.ts';
@@ -23,7 +25,22 @@ const store = new Store();
 const clients = new Set<http.ServerResponse>();
 
 const config = loadConfig();
-const desktop = new DesktopIndex(undefined, () => store.refreshDesktop());
+// ---- k dokončení (nepřečtená sezení aplikace) ----
+const DISMISSED_PATH = expandHome('~/.kancl/dismissed.json');
+let dismissed: Record<string, number> = {};
+try { dismissed = JSON.parse(readFileSync(DISMISSED_PATH, 'utf8')); } catch { dismissed = {}; }
+let todo: Todo[] = [];
+let lastTodoJson = '';
+function refreshTodo() {
+  const live = new Set(store.list().map(s => s.id));
+  const next = buildTodo(desktop.all(), Date.now(), live, dismissed);
+  const j = JSON.stringify(next);
+  if (j === lastTodoJson) return;
+  lastTodoJson = j; todo = next;
+  const line = `data: ${JSON.stringify({ type: 'todo', todo } satisfies ServerMessage)}\n\n`;
+  for (const res of clients) res.write(line);
+}
+const desktop = new DesktopIndex(undefined, () => { store.refreshDesktop(); refreshTodo(); });
 store.desktopResolver = id => { const d = desktop.lookup(id); return d ? { desktopId: d.desktopId, title: d.title } : undefined; };
 const night = new NightScanner(config, store, n => {
   const msg: ServerMessage = { type: 'night', night: n };
@@ -62,7 +79,7 @@ store.onSessionEnd = (s, reason) => {
 store.listeners.add((m: ServerMessage) => {
   const line = `data: ${JSON.stringify(m)}\n\n`;
   for (const res of clients) res.write(line);
-  if (m.type === 'upsert' || m.type === 'remove') scanner.publish();
+  if (m.type === 'upsert' || m.type === 'remove') { scanner.publish(); refreshTodo(); }
 });
 
 setInterval(() => {
@@ -173,6 +190,25 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ...d, waitingNow: waiting, ciFailingNow: ci, stockNow: night.night.stock, snapshotAt: night.night.snapshotAt });
     }
 
+    // ---- k dokončení ----
+    if (req.method === 'GET' && path === '/api/todo') return json(res, 200, { todo });
+    const todoDismiss = path.match(/^\/api\/todo\/([^/]+)\/dismiss$/);
+    if (req.method === 'POST' && todoDismiss) {
+      const id = decodeURIComponent(todoDismiss[1]);
+      dismissed[id] = Date.now();
+      try { mkdirSync(expandHome('~/.kancl'), { recursive: true }); writeFileSync(DISMISSED_PATH, JSON.stringify(dismissed, null, 2)); } catch { /* ignore */ }
+      refreshTodo();
+      return json(res, 200, { ok: true });
+    }
+    const todoFocus = path.match(/^\/api\/todo\/([^/]+)\/focus$/);
+    if (req.method === 'POST' && todoFocus) {
+      const id = decodeURIComponent(todoFocus[1]);
+      const t = todo.find(x => x.desktopId === id);
+      if (!t) return json(res, 404, { error: 'neznámé' });
+      const result = await focusTerminal({}, t.desktopId, t.title);
+      return json(res, 200, { ok: true, result });
+    }
+
     // kompaktní stav pro widgety (menu bar, telefon)
     if (req.method === 'GET' && path === '/api/widget') {
       const now = Date.now();
@@ -196,6 +232,8 @@ const server = http.createServer(async (req, res) => {
         },
         ci: scanner.projects.filter(p => p.ci?.status === 'fail').map(p => ({ project: p.name, name: p.ci!.name ?? null, url: p.ci!.url ?? null })),
         stock: night.night.stock?.items ?? [],
+        todo: todo.slice(0, 8).map(t => ({ id: t.desktopId, title: t.title, project: t.project, at: t.lastActivityAt, starred: t.starred, error: t.error ?? null })),
+        todoCount: todo.length,
       };
       return json(res, 200, body);
     }
@@ -220,7 +258,7 @@ const server = http.createServer(async (req, res) => {
         'Access-Control-Allow-Origin': '*',
       });
       res.write('retry: 2000\n\n');
-      const snapshot: ServerMessage = { type: 'snapshot', sessions: store.list(), projects: scanner.projects, night: night.night, serverStartedAt: store.serverStartedAt };
+      const snapshot: ServerMessage = { type: 'snapshot', sessions: store.list(), projects: scanner.projects, night: night.night, todo, serverStartedAt: store.serverStartedAt };
       res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
       clients.add(res);
       req.on('close', () => clients.delete(res));
@@ -258,7 +296,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   console.log(`Kancl → http://${HOST}:${PORT}`);
   history.load().catch(e => console.error('[history]', e));
-  desktop.start().catch(e => console.error('[desktop]', e));
+  desktop.start().then(() => refreshTodo()).catch(e => console.error('[desktop]', e));
   scanner.start().then(() => night.start()).catch(e => console.error('[scanner]', e));
   console.log(`  hooky posílají POST http://${HOST}:${PORT}/hook`);
   if (!existsSync(join(DIST, 'index.html'))) {

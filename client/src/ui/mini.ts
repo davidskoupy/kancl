@@ -1,4 +1,4 @@
-import type { Session, NightShift, SessionStatus } from '../../../shared/types.ts';
+import type { Session, NightShift, SessionStatus, Todo } from '../../../shared/types.ts';
 
 /** Mini režim (?mini=1): pruh do rohu obrazovky — souhrn, fronta „chce mě", noční směna. */
 const LABEL: Record<SessionStatus, string> = { permission: 'dotaz', error: 'chyba', waiting: 'čeká', completed: 'hotovo', working: 'práce', idle: 'klid' };
@@ -24,7 +24,9 @@ export class Mini {
   private sessions = new Map<string, Session>();
   private night: NightShift = { jobs: [], cloudSessions: [], scannedAt: 0 };
 
-  constructor(host: HTMLElement, private onFocus: (id: string) => void) {
+  private todo: Todo[] = [];
+
+  constructor(host: HTMLElement, private onFocus: (id: string) => void, private onTodo?: (id: string) => void) {
     this.root = host;
     window.setInterval(() => this.render(), 1000);
   }
@@ -32,6 +34,7 @@ export class Mini {
   upsert(s: Session) { this.sessions.set(s.id, s); this.render(); }
   remove(id: string) { this.sessions.delete(id); this.render(); }
   setNight(n: NightShift) { this.night = n; this.render(); }
+  setTodo(t: Todo[]) { this.todo = t; this.render(); }
 
   private render() {
     const all = [...this.sessions.values()];
@@ -53,9 +56,11 @@ export class Mini {
         <span>${all.length} sezení · ${working} pracuje${queue.length ? ` · <em>${queue.length} chce tě</em>` : ''}</span>
       </div>
       <ul class="mlist">${rows || '<li class="mempty">nikdo tě nepotřebuje</li>'}</ul>
+      ${this.todo.length ? `<div class="mtodo"><span class="mk">k dokončení ${this.todo.length}</span>${this.todo.slice(0, 3).map(t => `<span class="mt" data-tid="${esc(t.desktopId)}">${t.starred ? '★ ' : ''}${esc(t.title)} <small>${esc(t.project)}</small></span>`).join('')}</div>` : ''}
       <div class="mfoot ${jobsErr ? 'err' : ''}">
         noční směna: ${jobsOk} ✓${jobsErr ? ` · <b>${jobsErr} ✗</b>` : ''}${snapOld ? ' · <span class="old">cloud zastaralý</span>' : ''}
       </div>`;
     this.root.querySelectorAll<HTMLElement>('.mrow').forEach(li => li.addEventListener('click', () => this.onFocus(li.dataset.id!)));
+    this.root.querySelectorAll<HTMLElement>('.mt').forEach(el => el.addEventListener('click', () => this.onTodo?.(el.dataset.tid!)));
   }
 }

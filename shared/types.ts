@@ -115,6 +115,20 @@ export interface NightShift {
   scannedAt: number;
 }
 
+/** Sezení v desktopové aplikaci, ve kterém se něco stalo po posledním otevření (= k dokončení). */
+export interface Todo {
+  desktopId: string;
+  cliSessionId?: string;
+  title: string;
+  project: string;         // název složky
+  cwd?: string;
+  lastActivityAt: number;
+  lastFocusedAt?: number;
+  starred: boolean;
+  error?: string;
+  turns?: number;
+}
+
 export interface SessionEvent {
   at: number;
   event: string;     // hook_event_name
@@ -150,7 +164,8 @@ export interface Session {
 }
 
 export type ServerMessage =
-  | { type: 'snapshot'; sessions: Session[]; projects: Project[]; night: NightShift; serverStartedAt: number }
+  | { type: 'snapshot'; sessions: Session[]; projects: Project[]; night: NightShift; todo: Todo[]; serverStartedAt: number }
+  | { type: 'todo'; todo: Todo[] }
   | { type: 'projects'; projects: Project[] }
   | { type: 'night'; night: NightShift }
   | { type: 'upsert'; session: Session }

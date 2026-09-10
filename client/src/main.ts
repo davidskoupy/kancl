@@ -10,13 +10,14 @@ async function bootMini() {
   const host = document.getElementById('mini')!;
   host.hidden = false;
   let client: KanclClient;
-  const mini = new Mini(host, async id => { try { await client.focus(id); } catch { /* server neodpovídá */ } });
+  const mini = new Mini(host, async id => { try { await client.focus(id); } catch { /* server neodpovídá */ } }, async id => { try { await client.todoFocus(id); } catch { /* server neodpovídá */ } });
   client = new KanclClient({
     onUpsert: s => mini.upsert(s),
     onRemove: id => mini.remove(id),
     onState: () => {},
     onProjects: () => {},
     onNight: n => mini.setNight(n),
+    onTodo: t => mini.setTodo(t),
   });
   const attention = new Attention({ onOpen: id => client.focus(id) });
   client.events.onNight = n => { mini.setNight(n); attention.setNight(n); };
@@ -51,6 +52,8 @@ async function boot() {
     onHover: id => scene.hover(id),
     onDemo: () => client.startDemo(),
     onOpenFile: async path => panel.showToast(await client.openFile(path).catch(() => 'Server neodpovídá')),
+    onTodoFocus: async id => { const t = client.todo.find(x => x.desktopId === id); if (t) navigator.clipboard?.writeText(t.title).catch(() => {}); panel.showToast(await client.todoFocus(id).catch(() => 'Server neodpovídá')); },
+    onTodoDismiss: id => client.todoDismiss(id),
   });
 
   scene = new Scene(host, {
@@ -73,6 +76,7 @@ async function boot() {
     onState: st => panel.setConnection(st),
     onProjects: p => { scene.setProjects(p); panel.setProjects(p); },
     onNight: n => { scene.setNight(n); panel.setNight(n); attention.setNight(n); },
+    onTodo: t => panel.setTodo(t),
   });
 
   async function focus(id: string) {
