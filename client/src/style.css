@@ -244,3 +244,7 @@ body.digest #app { display: none; }
 /* ---- složka ---- */
 .session .folder, .todo .folder { color: var(--muted); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px; margin-top: 1px; opacity: .85; }
 .mname small.mfolder { opacity: .8; }
+
+.mtodo .mt { display: flex; flex-direction: column; white-space: normal; padding: 2px 0; }
+.mtodo .mt .mtt, .mtodo .mt .mtf { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mtodo .mt .mtf { color: var(--muted); font-size: 10px; }

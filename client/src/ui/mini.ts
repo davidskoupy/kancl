@@ -56,7 +56,7 @@ export class Mini {
         <span>${all.length} sezení · ${working} pracuje${queue.length ? ` · <em>${queue.length} chce tě</em>` : ''}</span>
       </div>
       <ul class="mlist">${rows || '<li class="mempty">nikdo tě nepotřebuje</li>'}</ul>
-      ${this.todo.length ? `<div class="mtodo"><span class="mk">k dokončení ${this.todo.length}</span>${this.todo.slice(0, 3).map(t => `<span class="mt" data-tid="${esc(t.desktopId)}" title="${esc(t.folder ?? '')}">${t.starred ? '★ ' : ''}${esc(t.title)} <small>${esc(t.project)}${t.folder ? ' · 📁 ' + esc(t.folder) : ''}</small></span>`).join('')}</div>` : ''}
+      ${this.todo.length ? `<div class="mtodo"><span class="mk">k dokončení ${this.todo.length}</span>${this.todo.slice(0, 3).map(t => `<span class="mt" data-tid="${esc(t.desktopId)}" title="${esc(t.folder ?? '')}"><span class="mtt">${t.starred ? '★ ' : ''}${esc(t.title)} <small>${esc(t.project)}</small></span>${t.folder ? `<small class="mtf">📁 ${esc(t.folder)}</small>` : ''}</span>`).join('')}</div>` : ''}
       <div class="mfoot ${jobsErr ? 'err' : ''}">
         noční směna: ${jobsOk} ✓${jobsErr ? ` · <b>${jobsErr} ✗</b>` : ''}${snapOld ? ' · <span class="old">cloud zastaralý</span>' : ''}
       </div>`;
