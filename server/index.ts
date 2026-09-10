@@ -173,6 +173,33 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ...d, waitingNow: waiting, ciFailingNow: ci, stockNow: night.night.stock, snapshotAt: night.night.snapshotAt });
     }
 
+    // kompaktní stav pro widgety (menu bar, telefon)
+    if (req.method === 'GET' && path === '/api/widget') {
+      const now = Date.now();
+      const all = store.list();
+      const ATT: Record<string, number> = { permission: 0, error: 1, waiting: 2, completed: 3 };
+      const queue = all.filter(s => s.status in ATT).sort((a, b) => ATT[a.status] - ATT[b.status] || a.statusSince - b.statusSince)
+        .map(s => ({ id: s.id, name: s.title ?? s.name, nick: s.title ? s.name : null, status: s.status, since: s.statusSince, project: s.project, message: s.message ?? null }));
+      const working = scanner.projects.filter(p => p.status !== 'klid').map(p => ({ name: p.name, sessions: all.filter(s => s.projectId === p.id).length }));
+      const jobs = night.night.jobs;
+      const upcoming = jobs.filter(j => j.nextRunAt && j.nextRunAt > now).sort((a, b) => a.nextRunAt! - b.nextRunAt!)[0];
+      const body = {
+        at: now,
+        sessions: { total: all.length, working: all.filter(s => s.status === 'working').length, attention: queue.length },
+        queue: queue.slice(0, 10),
+        working,
+        night: {
+          ok: jobs.filter(j => j.state === 'ok').length, fail: jobs.filter(j => j.state === 'chyba').length,
+          running: jobs.filter(j => j.state === 'bezi').length, sleeping: jobs.filter(j => j.state === 'spi').length,
+          snapshotAt: night.night.snapshotAt ?? null, snapshotOld: !!night.night.snapshotAt && now - night.night.snapshotAt > 2 * 3600_000,
+          nextName: upcoming?.name ?? null, nextAt: upcoming?.nextRunAt ?? null,
+        },
+        ci: scanner.projects.filter(p => p.ci?.status === 'fail').map(p => ({ project: p.name, name: p.ci!.name ?? null, url: p.ci!.url ?? null })),
+        stock: night.night.stock?.items ?? [],
+      };
+      return json(res, 200, body);
+    }
+
     if (req.method === 'GET' && path === '/api/night') {
       return json(res, 200, { night: night.night });
     }

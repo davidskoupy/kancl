@@ -5,3 +5,4 @@ dist/
 *.log
 .superpowers/
 .env
+bar/build/

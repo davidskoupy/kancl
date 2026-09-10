@@ -1,0 +1,9 @@
+{
+  "name": "Kancl",
+  "short_name": "Kancl",
+  "start_url": "/?mini=1",
+  "display": "standalone",
+  "background_color": "#0f1218",
+  "theme_color": "#0f1218",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

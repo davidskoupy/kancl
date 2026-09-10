@@ -67,6 +67,7 @@ Cesta k hook skriptu je v `settings.json` absolutní. Když repo přesuneš, spu
 | `Kancl.command` | Spustí server na pozadí a otevře prohlížeč |
 | `Kancl — Stop.command` | Zastaví server |
 | `Kancl — Autostart.command` | Zapne/vypne start po přihlášení (macOS LaunchAgent) |
+| `KanclBar — Autostart.command` | Zapne/vypne widget v menu baru po přihlášení |
 
 ### Odinstalace
 
@@ -148,6 +149,22 @@ Projekty se v panelu řadí do skupin z configu (`groups`, glob na id nebo náze
 zbytek „ostatní"). Špendlík u projektu ho drží nahoře i v klidu. Hledání filtruje projekty, sezení, úlohy i cloud.
 Rozbalení, filtr, zoom a připnutí přežijí reload.
 
+## Widget v menu baru (KanclBar)
+
+`bar/KanclBar.swift` je malá nativní aplikace pro menu bar, přeložená přes `swiftc` (stačí Command Line Tools, Xcode
+není potřeba). Každé 3 s čte `/api/widget` a v menu baru ukazuje jen to, co hoří: `🕹 ❓2 💬1 🌙✗1 CI✗4`, v klidu
+`🕹 pracuje/celkem`. Rozbalení = fronta „chce mě" (klik = stejný fokus jako Enter, název jde do schránky), projekty
+v práci, noční směna s dalším během, CI selhání s odkazy, zásoba témat.
+
+```bash
+bash bar/build.sh                       # přeloží do bar/build/KanclBar.app
+bar/build/KanclBar.app/Contents/MacOS/KanclBar --once   # vypíše stav do terminálu
+open bar/build/KanclBar.app             # spustí ikonu v menu baru
+```
+
+`KanclBar — Autostart.command` ho zapne po přihlášení (a dalším dvojklikem vypne). Widget do Notification Center
+(WidgetKit) by potřeboval Xcode a obnovoval by se jen jednou za pár minut; menu bar je realtime.
+
 ## Kancl v mobilu (Tailscale)
 
 Kancl poslouchá jen na `127.0.0.1`. Když ho chceš v telefonu, pusť server na adrese tailnetu (nikdy `0.0.0.0`):
@@ -157,6 +174,13 @@ KANCL_HOST=100.x.y.z npx tsx server/index.ts
 ```
 
 a v telefonu otevři `http://100.x.y.z:4242/?mini=1`. Hook skript posílá dál na `127.0.0.1`, takže ho to neovlivní.
+
+- **Na plochu jako aplikace:** Safari → Sdílet → Přidat na plochu. Stránka má manifest, otevře se bez lišty prohlížeče
+  rovnou v mini režimu a je živá přes SSE, dokud je otevřená.
+- **Widget na ploše iPhonu:** `phone/kancl-widget.js` pro aplikaci Scriptable. Vlož skript, nastav `BASE` na adresu
+  Macu v tailnetu, přidej widget Scriptable (střední) a vyber skript. iOS ho obnovuje zhruba každých 15 minut.
+- **Push notifikace** na iPhone (dotaz, chyba úlohy, alarm zásoby) vyžadují HTTPS pro service worker, tedy
+  `tailscale serve` s certifikátem MagicDNS. Přijdou jako další krok, až bude Tailscale na Macu.
 
 ## Config
 
