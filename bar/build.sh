@@ -20,6 +20,7 @@ cat > "$APP/Contents/Info.plist" <<'PL'
   <key>LSUIElement</key><true/>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>
 PL
 codesign --force --sign - "$APP" >/dev/null 2>&1 || true

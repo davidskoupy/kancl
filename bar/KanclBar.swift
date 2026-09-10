@@ -5,6 +5,7 @@
 
 import AppKit
 import Foundation
+import WebKit
 
 struct WQueue: Decodable { let id: String; let name: String; let nick: String?; let status: String; let since: Double; let project: String?; let message: String? }
 struct WNight: Decodable { let ok: Int; let fail: Int; let running: Int; let sleeping: Int; let snapshotAt: Double?; let snapshotOld: Bool; let nextName: String?; let nextAt: Double? }
@@ -50,13 +51,12 @@ func fetchWidget(_ done: @escaping (Widget?) -> Void) {
 
 /// Titulek v menu baru: ikona + jen to, co hoří. V klidu „🕹 pracuje/celkem".
 func barTitle(_ w: Widget) -> String {
+  // co nejkratší: v menu baru je málo místa. Detaily jsou v panelu a v menu.
   var parts: [String] = []
   let count = { (st: String) in w.queue.filter { $0.status == st }.count }
-  for st in ["permission", "error", "waiting", "completed"] { let n = count(st); if n > 0 { parts.append("\(STATUS_ICON[st]!)\(n)") } }
-  if w.night.fail > 0 { parts.append("🌙✗\(w.night.fail)") }
-  if !w.ci.isEmpty { parts.append("CI✗\(w.ci.count)") }
-  if w.stock.contains(where: { $0.alarm }) { parts.append("📚!") }
-  return parts.isEmpty ? "🕹 \(w.sessions.working)/\(w.sessions.total)" : "🕹 " + parts.joined(separator: " ")
+  for st in ["permission", "error", "waiting"] { let n = count(st); if n > 0 { parts.append("\(STATUS_ICON[st]!)\(n)") } }
+  if w.night.fail > 0 || !w.ci.isEmpty || w.stock.contains(where: { $0.alarm }) { parts.append("⚠︎") }
+  return parts.isEmpty ? "🕹" : "🕹" + parts.joined(separator: "")
 }
 
 /// Řádky menu jako text (stejné pro --once i pro NSMenu).
@@ -85,15 +85,52 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
   return out
 }
 
+/// Plovoucí panel u pravého okraje obrazovky s živým mini režimem (?mini=1). Vždy nahoře, na všech plochách.
+final class SidePanel {
+  let panel: NSPanel
+  let web: WKWebView
+
+  init() {
+    let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+    let w: CGFloat = 340, h: CGFloat = 320
+    let frame = NSRect(x: screen.maxX - w - 12, y: screen.maxY - h - 12, width: w, height: h)
+    panel = NSPanel(contentRect: frame, styleMask: [.titled, .closable, .resizable, .utilityWindow, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: false)
+    panel.title = "Kancl"
+    panel.titleVisibility = .hidden
+    panel.titlebarAppearsTransparent = true
+    panel.isMovableByWindowBackground = true
+    panel.level = .floating
+    panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+    panel.hidesOnDeactivate = false
+    panel.isReleasedWhenClosed = false
+    panel.backgroundColor = NSColor(calibratedRed: 0.06, green: 0.07, blue: 0.09, alpha: 1)
+    panel.setFrameAutosaveName("KanclPanel")
+    let cfg = WKWebViewConfiguration()
+    web = WKWebView(frame: panel.contentView!.bounds, configuration: cfg)
+    web.autoresizingMask = [.width, .height]
+    web.setValue(false, forKey: "drawsBackground")
+    panel.contentView!.addSubview(web)
+    if let url = URL(string: base + "/?mini=1") { web.load(URLRequest(url: url)) }
+  }
+
+  var isVisible: Bool { panel.isVisible }
+  func show() { panel.orderFrontRegardless() }
+  func hide() { panel.orderOut(nil) }
+  func reload() { web.reload() }
+}
+
 final class Bar: NSObject {
   let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   let menu = NSMenu()
   var timer: Timer?
   var last: Widget?
+  var side: SidePanel?
 
   func start() {
-    item.button?.title = "🕹 …"
+    item.autosaveName = "KanclBar"
+    item.button?.title = "🕹"
     item.menu = menu
+    if UserDefaults.standard.object(forKey: "panelVisible") as? Bool ?? true { showPanel() }
     refresh()
     timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.refresh() }
   }
@@ -105,7 +142,7 @@ final class Bar: NSObject {
   func render(_ w: Widget?) {
     menu.removeAllItems()
     guard let w else {
-      item.button?.title = "🕹 ✕"
+      item.button?.title = "🕹✕"
       menu.addItem(withTitle: "Kancl neběží (\(base))", action: nil, keyEquivalent: "")
       addFooter()
       return
@@ -134,8 +171,15 @@ final class Bar: NSObject {
     addFooter()
   }
 
+  func showPanel() { if side == nil { side = SidePanel() }; side?.show(); UserDefaults.standard.set(true, forKey: "panelVisible") }
+  func hidePanel() { side?.hide(); UserDefaults.standard.set(false, forKey: "panelVisible") }
+  @objc func togglePanel() { if side?.isVisible == true { hidePanel() } else { showPanel() } }
+  @objc func reloadPanel() { side?.reload() }
+
   func addFooter() {
     menu.addItem(.separator())
+    let p = NSMenuItem(title: "Panel u okraje obrazovky", action: #selector(togglePanel), keyEquivalent: "p"); p.target = self; p.state = side?.isVisible == true ? .on : .off; menu.addItem(p)
+    if side?.isVisible == true { let r = NSMenuItem(title: "Obnovit panel", action: #selector(reloadPanel), keyEquivalent: ""); r.target = self; menu.addItem(r) }
     let open = NSMenuItem(title: "Otevřít Kancl", action: #selector(openKancl), keyEquivalent: "o"); open.target = self; menu.addItem(open)
     let mini = NSMenuItem(title: "Mini režim", action: #selector(openMini), keyEquivalent: "m"); mini.target = self; menu.addItem(mini)
     let dig = NSMenuItem(title: "Co se stalo (ráno)", action: #selector(openDigest), keyEquivalent: "r"); dig.target = self; menu.addItem(dig)
