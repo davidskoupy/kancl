@@ -128,7 +128,7 @@ final class GrabBar: NSView {
 }
 
 /// Plovoucí panel u okraje obrazovky s živým mini režimem (?mini=1). Vždy nahoře, na všech plochách.
-final class SidePanel {
+final class SidePanel: NSObject, WKNavigationDelegate {
   let panel: NSPanel
   let web: WKWebView
   let grab = GrabBar(frame: .zero)
@@ -136,7 +136,10 @@ final class SidePanel {
   var expandedHeight: CGFloat = 320
   var collapsed = UserDefaults.standard.bool(forKey: "panelCollapsed")
 
-  init() {
+  var loaded = false
+  var retryTimer: Timer?
+
+  override init() {
     let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
     let w: CGFloat = 340, h: CGFloat = 320
     let frame = NSRect(x: screen.maxX - w - 12, y: screen.maxY - h - 12, width: w, height: h)
@@ -159,11 +162,13 @@ final class SidePanel {
     panel.contentView = content
     web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
     web.setValue(false, forKey: "drawsBackground")
+    super.init()
+    web.navigationDelegate = self
     content.addSubview(web)
     content.addSubview(grab)
     grab.collapseBtn.target = self; grab.collapseBtn.action = #selector(toggleCollapse)
     grab.closeBtn.target = self; grab.closeBtn.action = #selector(hideFromButton)
-    if let url = URL(string: base + "/?mini=1") { web.load(URLRequest(url: url)) }
+    load()
     expandedHeight = max(panel.frame.height, 120)
     if collapsed { applyCollapsed(animate: false) }
     NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: panel, queue: .main) { [weak self] _ in self?.relayout() }
@@ -180,6 +185,29 @@ final class SidePanel {
   }
 
   func setTitle(_ t: String) { grab.label.stringValue = t }
+
+  // ---- načítání s opakováním: server mohl při startu ještě neběžet ----
+  func load() {
+    loaded = false
+    guard let url = URL(string: base + "/?mini=1") else { return }
+    var req = URLRequest(url: url); req.cachePolicy = .reloadIgnoringLocalCacheData; req.timeoutInterval = 4
+    web.load(req)
+  }
+  func scheduleRetry() {
+    retryTimer?.invalidate()
+    retryTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { [weak self] _ in self?.load() }
+  }
+  /// Volá Bar po každém úspěšném dotazu na server: když panel není načtený, zkusí to znovu.
+  func ensureLoaded() { if !loaded && retryTimer?.isValid != true { load() } }
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    // stránka se načetla, ale ověříme, že má obsah (ne chybovou stránku)
+    webView.evaluateJavaScript("document.getElementById('mini') ? 1 : 0") { [weak self] v, _ in
+      if (v as? Int) == 1 { self?.loaded = true } else { self?.scheduleRetry() }
+    }
+  }
+  func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { loaded = false; scheduleRetry() }
+  func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { loaded = false; scheduleRetry() }
+  func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { loaded = false; scheduleRetry() }
 
   func applyCollapsed(animate: Bool) {
     var f = panel.frame
@@ -211,7 +239,7 @@ final class SidePanel {
   var isVisible: Bool { panel.isVisible }
   func show() { panel.orderFrontRegardless(); relayout() }
   func hide() { panel.orderOut(nil) }
-  func reload() { web.reload() }
+  func reload() { load() }
 }
 
 // ---- přepnutí na sezení v aplikaci Claude přes Accessibility ----------------------
@@ -321,11 +349,13 @@ final class Bar: NSObject {
     guard let w else {
       item.button?.title = "🕹✕"
       side?.setTitle("Kancl neběží")
+      side?.loaded = false
       menu.addItem(withTitle: "Kancl neběží (\(base))", action: nil, keyEquivalent: "")
       addFooter()
       return
     }
     last = w
+    side?.ensureLoaded()
     item.button?.title = barTitle(w)
     side?.setTitle("Kancl · \(w.sessions.working)/\(w.sessions.total) pracuje" + (w.queue.isEmpty ? "" : " · \(w.queue.count) chce tě") + (w.night.fail > 0 ? " · 🌙✗\(w.night.fail)" : "") + (w.ci.isEmpty ? "" : " · CI✗\(w.ci.count)"))
     item.button?.toolTip = "Kancl · \(w.sessions.attention) chce tě"
