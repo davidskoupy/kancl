@@ -229,6 +229,7 @@ const server = http.createServer(async (req, res) => {
           running: jobs.filter(j => j.state === 'bezi').length, sleeping: jobs.filter(j => j.state === 'spi').length,
           snapshotAt: night.night.snapshotAt ?? null, snapshotOld: !!night.night.snapshotAt && now - night.night.snapshotAt > 2 * 3600_000,
           nextName: upcoming?.name ?? null, nextAt: upcoming?.nextRunAt ?? null,
+          jobs: jobs.map(j => ({ id: j.id, name: j.name, state: j.state, lastRunAt: j.lastRunAt ?? null, resultText: j.lastResult?.resultText ?? null })),
         },
         ci: scanner.projects.filter(p => p.ci?.status === 'fail').map(p => ({ project: p.name, name: p.ci!.name ?? null, url: p.ci!.url ?? null })),
         stock: night.night.stock?.items ?? [],

@@ -5,11 +5,13 @@
 
 import AppKit
 import ApplicationServices
+import UserNotifications
 import Foundation
 import WebKit
 
 struct WQueue: Decodable { let id: String; let name: String; let nick: String?; let status: String; let since: Double; let project: String?; let folder: String?; let message: String? }
-struct WNight: Decodable { let ok: Int; let fail: Int; let running: Int; let sleeping: Int; let snapshotAt: Double?; let snapshotOld: Bool; let nextName: String?; let nextAt: Double? }
+struct WJob: Decodable { let id: String; let name: String; let state: String; let lastRunAt: Double?; let resultText: String? }
+struct WNight: Decodable { let ok: Int; let fail: Int; let running: Int; let sleeping: Int; let snapshotAt: Double?; let snapshotOld: Bool; let nextName: String?; let nextAt: Double?; let jobs: [WJob] }
 struct WCi: Decodable { let project: String; let name: String?; let url: String? }
 struct WStock: Decodable { let project: String; let pending: Int; let alarm: Bool }
 struct WSessions: Decodable { let total: Int; let working: Int; let attention: Int }
@@ -103,6 +105,75 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
   return out
 }
 
+/// Systémová upozornění: posílá je přímo KanclBar (WKWebView v panelu web notifikace neumí).
+final class Notifier: NSObject, UNUserNotificationCenterDelegate {
+  static let shared = Notifier()
+  private var sent = Set<String>()
+  private var authorized = false
+  /// klik na upozornění → přepnout na sezení v aplikaci Claude
+  var onOpen: ((String) -> Void)?
+
+  var enabled: Bool {
+    get { UserDefaults.standard.object(forKey: "notify") as? Bool ?? true }
+    set { UserDefaults.standard.set(newValue, forKey: "notify") }
+  }
+
+  /// diagnostika do ~/.kancl/notify.log (přes `open` se stdout nikam nedostane)
+  func log(_ m: String) {
+    let line = "\(DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .medium)) \(m)\n"
+    let path = NSString(string: "~/.kancl/notify.log").expandingTildeInPath
+    if let h = FileHandle(forWritingAtPath: path) { h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close() }
+    else { try? line.write(toFile: path, atomically: true, encoding: .utf8) }
+    print(m)
+  }
+
+  func start() {
+    let c = UNUserNotificationCenter.current()
+    c.delegate = self
+    log("[upozornění] start · bundle \(Bundle.main.bundleIdentifier ?? "?") · cesta \(Bundle.main.bundlePath)")
+    c.requestAuthorization(options: [.alert, .sound]) { ok, err in
+      self.authorized = ok
+      self.log("[upozornění] povolení: \(ok ? "ano" : "ne")\(err.map { " (\($0.localizedDescription))" } ?? "")")
+    }
+  }
+
+  /// náhradní cesta, když systém bannery nepovolí: rozblikat panel a pípnout
+  var fallback: ((String, String) -> Void)?
+  var soundOn: Bool {
+    get { UserDefaults.standard.object(forKey: "notifySound") as? Bool ?? true }
+    set { UserDefaults.standard.set(newValue, forKey: "notifySound") }
+  }
+
+  func post(key: String, title: String, body: String, sessionTitle: String?) {
+    guard enabled, !sent.contains(key) else { return }
+    sent.insert(key)
+    if sent.count > 500 { sent.removeAll() }
+    if !authorized {
+      if soundOn { NSSound(named: "Submarine")?.play() }
+      DispatchQueue.main.async { self.fallback?(title, body) }
+      return
+    }
+    let c = UNMutableNotificationContent()
+    c.title = title
+    c.body = body
+    c.sound = nil                        // pípání řeší panel, ať to nezvoní dvakrát
+    if let t = sessionTitle { c.userInfo = ["title": t] }
+    UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: key, content: c, trigger: nil)) { err in
+      self.log(err == nil ? "[upozornění] posláno: \(title)" : "[upozornění] nešlo poslat: \(err!.localizedDescription)")
+    }
+  }
+
+  /// zobrazit i když je KanclBar vpředu
+  func userNotificationCenter(_ c: UNUserNotificationCenter, willPresent n: UNNotification, withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
+    done([.banner, .list])
+  }
+
+  func userNotificationCenter(_ c: UNUserNotificationCenter, didReceive r: UNNotificationResponse, withCompletionHandler done: @escaping () -> Void) {
+    if let t = r.notification.request.content.userInfo["title"] as? String { DispatchQueue.main.async { self.onOpen?(t) } }
+    done()
+  }
+}
+
 /// Lišta nahoře na panelu: táhne se za ni, má sbalení (–) a schování (×).
 final class GrabBar: NSView {
   let label = NSTextField(labelWithString: "Kancl")
@@ -188,7 +259,26 @@ final class SidePanel: NSObject, WKNavigationDelegate {
     if !collapsed && panel.frame.height > grabH + 10 { expandedHeight = panel.frame.height }
   }
 
-  func setTitle(_ t: String) { grab.label.stringValue = t }
+  func setTitle(_ t: String) { if flashUntil < Date() { grab.label.stringValue = t } }
+
+  private var flashUntil = Date.distantPast
+  private var flashTimer: Timer?
+  /// Upozornění bez systémového banneru: panel vyskočí dopředu a lišta 20 s svítí.
+  func flash(title: String, body: String) {
+    panel.orderFrontRegardless()
+    if collapsed { collapsed = false; UserDefaults.standard.set(false, forKey: "panelCollapsed"); applyCollapsed(animate: true) }
+    grab.label.stringValue = title
+    grab.label.textColor = NSColor(calibratedRed: 0.07, green: 0.09, blue: 0.12, alpha: 1)
+    grab.layer?.backgroundColor = NSColor(calibratedRed: 0.96, green: 0.79, blue: 0.26, alpha: 1).cgColor
+    flashUntil = Date().addingTimeInterval(20)
+    flashTimer?.invalidate()
+    flashTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: false) { [weak self] _ in
+      guard let self else { return }
+      self.grab.layer?.backgroundColor = NSColor(calibratedRed: 0.09, green: 0.11, blue: 0.14, alpha: 1).cgColor
+      self.grab.label.textColor = NSColor(calibratedRed: 0.9, green: 0.91, blue: 0.94, alpha: 1)
+      self.flashUntil = .distantPast
+    }
+  }
 
   // ---- načítání s opakováním: server mohl při startu ještě neběžet ----
   func load() {
@@ -343,6 +433,12 @@ final class Bar: NSObject, NSMenuDelegate {
     item.button?.title = "🕹"
     item.menu = menu
     menu.delegate = self   // položky se staví až při otevření, ne při každém dotazu
+    Notifier.shared.onOpen = { title in
+      NSPasteboard.general.clearContents(); NSPasteboard.general.setString(title, forType: .string)
+      DispatchQueue.global().async { let r = axFocusSession(title: title); DispatchQueue.main.async { self.reportAX(r, title: title) } }
+    }
+    Notifier.shared.fallback = { [weak self] title, body in self?.side?.flash(title: title, body: body) ?? self?.showPanelFlash(title: title, body: body) }
+    Notifier.shared.start()
     if UserDefaults.standard.object(forKey: "panelVisible") as? Bool ?? true { showPanel() }
     refresh()
     timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.refresh() }
@@ -376,11 +472,27 @@ final class Bar: NSObject, NSMenuDelegate {
       return
     }
     lastOkAt = Date()
+    notify(w)
     side?.ensureLoaded()
     item.button?.title = barTitle(w)
     side?.setTitle("Kancl · \(w.sessions.working)/\(w.sessions.total) pracuje" + (w.sessions.attention == 0 ? "" : " · \(w.sessions.attention) chce tě") + (w.night.fail > 0 ? " · 🌙✗\(w.night.fail)" : "") + (w.ci.isEmpty ? "" : " · CI✗\(w.ci.count)"))
     item.button?.toolTip = "Kancl · \(w.sessions.attention) chce tě"
     if menuOpen { rebuildMenu() }
+  }
+
+  /// Co se změnilo od minulého dotazu: nové dotazy, chyby, otázky, hotová sezení a spadlé úlohy.
+  func notify(_ w: Widget) {
+    let label = ["permission": "chce povolení", "error": "skončilo chybou", "waiting": "čeká na tebe", "completed": "má hotovo"]
+    for q in w.queue {
+      guard let what = label[q.status] else { continue }
+      let where_ = q.project.map { " · \($0)" } ?? ""
+      Notifier.shared.post(key: "s:\(q.id):\(q.status):\(Int(q.since))",
+                           title: "\(STATUS_ICON[q.status] ?? "•") \(q.name)\(where_)",
+                           body: q.message ?? what, sessionTitle: q.nick != nil ? q.name : nil)
+    }
+    for j in w.night.jobs where j.state == "chyba" {
+      Notifier.shared.post(key: "j:\(j.id):\(Int(j.lastRunAt ?? 0))", title: "🌙 \(j.name) selhala", body: j.resultText ?? "noční úloha skončila chybou", sessionTitle: nil)
+    }
   }
 
   func menuWillOpen(_ menu: NSMenu) { menuOpen = true; rebuildMenu() }
@@ -420,6 +532,13 @@ final class Bar: NSObject, NSMenuDelegate {
   func hidePanel() { side?.hide(); UserDefaults.standard.set(false, forKey: "panelVisible") }
   @objc func togglePanel() { if side?.isVisible == true { hidePanel() } else { showPanel() } }
   @objc func reloadPanel() { side?.reload() }
+  @objc func toggleNotify() { Notifier.shared.enabled.toggle() }
+  @objc func toggleNotifySound() { Notifier.shared.soundOn.toggle() }
+  /// panel je schovaný: ukázat ho, ať je upozornění vidět
+  func showPanelFlash(title: String, body: String) { showPanel(); side?.flash(title: title, body: body) }
+  @objc func testNotify() {
+    Notifier.shared.post(key: "test:\(Int(Date().timeIntervalSince1970))", title: "🕹 Kancl", body: "Zkušební upozornění — takhle ti dám vědět, že tě někdo potřebuje.", sessionTitle: nil)
+  }
   @objc func openAX() { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!) }
   @objc func collapsePanel() { side?.toggleCollapse() }
   @objc func snapPanel(_ sender: NSMenuItem) { if let k = sender.representedObject as? String { side?.snap(k) } }
@@ -441,6 +560,9 @@ final class Bar: NSObject, NSMenuDelegate {
       al.submenu = asub; menu.addItem(al)
       let r = NSMenuItem(title: "Obnovit panel", action: #selector(reloadPanel), keyEquivalent: ""); r.target = self; menu.addItem(r)
     }
+    let notif = NSMenuItem(title: "Upozornění", action: #selector(toggleNotify), keyEquivalent: "n"); notif.target = self; notif.state = Notifier.shared.enabled ? .on : .off; menu.addItem(notif)
+    let snd = NSMenuItem(title: "Zvuk u upozornění", action: #selector(toggleNotifySound), keyEquivalent: ""); snd.target = self; snd.state = Notifier.shared.soundOn ? .on : .off; menu.addItem(snd)
+    let test = NSMenuItem(title: "Poslat zkušební upozornění", action: #selector(testNotify), keyEquivalent: ""); test.target = self; menu.addItem(test)
     let open = NSMenuItem(title: "Otevřít Kancl", action: #selector(openKancl), keyEquivalent: "o"); open.target = self; menu.addItem(open)
     let mini = NSMenuItem(title: "Mini režim", action: #selector(openMini), keyEquivalent: "m"); mini.target = self; menu.addItem(mini)
     let dig = NSMenuItem(title: "Co se stalo (ráno)", action: #selector(openDigest), keyEquivalent: "r"); dig.target = self; menu.addItem(dig)
@@ -499,6 +621,17 @@ final class Bar: NSObject, NSMenuDelegate {
 }
 
 // ---- vstup -----------------------------------------------------------------
+if CommandLine.arguments.contains("--notify-test") {
+  let app = NSApplication.shared
+  app.setActivationPolicy(.accessory)
+  Notifier.shared.start()
+  DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+    Notifier.shared.post(key: "cli:\(Int(Date().timeIntervalSince1970))", title: "🕹 Kancl", body: "Zkušební upozornění z příkazové řádky.", sessionTitle: nil)
+  }
+  DispatchQueue.main.asyncAfter(deadline: .now() + 4) { exit(0) }
+  app.run()
+}
+
 if let i = CommandLine.arguments.firstIndex(of: "--focus"), i + 1 < CommandLine.arguments.count {
   let r = axFocusSession(title: CommandLine.arguments[i + 1])
   print(r)

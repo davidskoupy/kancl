@@ -77,7 +77,7 @@ export class Mini {
       <div class="mhead">
         <b>Kancl</b>
         <span>${all.length} sezení · ${working} pracuje${needs ? ` · <em>${needs} chce tě</em>` : ''}</span>
-        ${this.prefs ? `<span class="mprefs"><button class="mpref ${this.prefs.get().notify ? 'on' : ''}" data-pref="notify" title="Systémová upozornění, když tě někdo potřebuje">🔔</button><button class="mpref ${this.prefs.get().sound ? 'on' : ''}" data-pref="sound" title="Pípnutí při dotazu a chybě">${this.prefs.get().sound ? '🔊' : '🔈'}</button></span>` : ''}
+        ${this.prefs ? `<span class="mprefs"><button class="mpref ${this.prefs.get().sound ? 'on' : ''}" data-pref="sound" title="Pípnutí při dotazu a chybě (systémová upozornění posílá KanclBar, přepínač je v menu 🕹)">${this.prefs.get().sound ? '🔊' : '🔈'}</button></span>` : ''}
       </div>
       <ul class="mlist">${rows || '<li class="mempty">nikdo tě nepotřebuje</li>'}</ul>
       ${workingProjects.length ? `<div class="mwork">v práci: ${workingProjects.map(esc).join(' · ')}</div>` : ''}
