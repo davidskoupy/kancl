@@ -43,13 +43,22 @@ test('parseRunsMd: výsledky, skip, alarm dědí datum', () => {
   assert.equal(rows[2].result, 'ok'); assert.equal(rows[2].slug, 'udrzba-pergoly');
   assert.equal(rows[3].result, 'skip'); assert.equal(rows[3].project, undefined);
 });
-test('parseStock vytáhne weby a alarm', () => {
-  const note = 'Krok 10: zásoba pending po běhu — deky 28 · katalogodpadu 33 (z `main`, autoritativní) · baliky 15 (+1 `drafted`) · **zahradni-domky 3** (≤5 → varování). Doplň content-plan.md; při rotaci po 4 webech vydrží zhruba 12 dní.';
+test('parseStock: seznam za pomlčkou, alarm podle ** i prahu 5', () => {
+  const note = 'Krok 10: zásoba pending po běhu — deky 28 · katalogodpadu 32 (z `main`) · baliky 14 · **zahradni-domky 2** (≤5 → varování). Reálně použitelné je jen 020. **Doplň `content-plan.md`.**';
   assert.deepEqual(parseStock(note), [
-    { project: 'deky', pending: 28, alarm: false }, { project: 'katalogodpadu', pending: 33, alarm: false },
-    { project: 'baliky', pending: 15, alarm: false }, { project: 'zahradni-domky', pending: 3, alarm: true },
+    { project: 'deky', pending: 28, alarm: false }, { project: 'katalogodpadu', pending: 32, alarm: false },
+    { project: 'baliky', pending: 14, alarm: false }, { project: 'zahradni-domky', pending: 2, alarm: true },
   ]);
 });
+
+test('parseStock: věta za seznamem se nepočítá a weby se neopakují', () => {
+  const note = 'Krok 10: zásoba pending po běhu (počítáno jen uvnitř yaml fence) — deky 26 · katalogodpadu 37 · baliky 13 (téma 013 dnes publikováno) · zahradni-domky 21. **Žádný web pod prahem 5, alarm zásoby se neposílá.** Pozn.: katalogodpadu 37 je z hlavního checkoutu.';
+  assert.deepEqual(parseStock(note), [
+    { project: 'deky', pending: 26, alarm: false }, { project: 'katalogodpadu', pending: 37, alarm: false },
+    { project: 'baliky', pending: 13, alarm: false }, { project: 'zahradni-domky', pending: 21, alarm: false },
+  ]);
+});
+
 test('deriveJobState', () => {
   const now = Date.parse('2026-09-08T08:00:00Z');
   const h = 3600_000;

@@ -136,20 +136,32 @@ export function parseRunsMd(text: string, cols: RunsColumns = CONTENT_ENGINE_COL
   return out;
 }
 
-/** Z poznámky alarmu: "zásoba … — deky 28 · **zahradni-domky 3** (…)" → seznam webů; `**web N**` = alarm. */
+/**
+ * Z poznámky o zásobě: „zásoba pending po běhu — deky 28 · katalogodpadu 32 · **zahradni-domky 2** (…)".
+ * Bere jen seznam za pomlčkou do konce první věty, po jedné položce mezi oddělovači `·` / `,`.
+ * Alarm = web označený `**…**` nebo se zásobou ≤ 5 (práh content enginu).
+ */
+export const STOCK_ALARM_AT = 5;
+
 export function parseStock(note: string): { project: string; pending: number; alarm: boolean }[] {
   const i = note.search(/z[áa]soba/i);
   if (i < 0) return [];
-  let seg = note.slice(i);
-  const end = seg.search(/\.\s+(?=[A-ZÁ-Ž])|\n/);
-  if (end > 0) seg = seg.slice(0, end);
-  seg = seg.replace(/\([^)]*\)/g, ' ').replace(/`[^`]*`/g, ' ');
+  let seg = note.slice(i)
+    .replace(/\([^)]*\)/g, ' ')     // vysvětlivky v závorkách
+    .replace(/`[^`]*`/g, ' ');       // cesty a větve v backticích
+  const dash = seg.search(/[—–:]/);  // seznam začíná až za pomlčkou (nebo dvojtečkou)
+  if (dash >= 0) seg = seg.slice(dash + 1);
+  const stop = seg.search(/\.\s|\n/); // a končí první větou
+  if (stop >= 0) seg = seg.slice(0, stop);
   const out: { project: string; pending: number; alarm: boolean }[] = [];
-  const re = /(\*\*)?([a-z][a-z0-9-]{2,})\s+(\d+)(\*\*)?/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(seg))) {
-    if (['zhruba', 'pending', 'krok'].includes(m[2])) continue;
-    out.push({ project: m[2], pending: Number(m[3]), alarm: !!m[1] || !!m[4] });
+  const seen = new Set<string>();
+  for (const raw of seg.split(/[·,;]/)) {
+    const m = raw.trim().match(/^(\*\*)?([a-z][a-z0-9-]{2,})\s+(\d+)(\*\*)?$/);
+    if (!m) continue;
+    if (seen.has(m[2])) continue;
+    seen.add(m[2]);
+    const pending = Number(m[3]);
+    out.push({ project: m[2], pending, alarm: !!m[1] || !!m[4] || pending <= STOCK_ALARM_AT });
   }
   return out;
 }
