@@ -325,18 +325,20 @@ func axFocusSession(title: String) -> AXFocusResult {
   return axPress(el) ? .ok : .notFound
 }
 
-final class Bar: NSObject {
+final class Bar: NSObject, NSMenuDelegate {
   let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   let menu = NSMenu()
   var timer: Timer?
   var last: Widget?
   var side: SidePanel?
+  var menuOpen = false
 
   func start() {
     NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleURL(_:with:)), forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
     item.autosaveName = "KanclBar"
     item.button?.title = "🕹"
     item.menu = menu
+    menu.delegate = self   // položky se staví až při otevření, ne při každém dotazu
     if UserDefaults.standard.object(forKey: "panelVisible") as? Bool ?? true { showPanel() }
     refresh()
     timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.refresh() }
@@ -346,21 +348,34 @@ final class Bar: NSObject {
     fetchWidget { w in DispatchQueue.main.async { self.render(w) } }
   }
 
+  /// Každé 3 s: jen titulek a panel. Menu se staví až když ho otevřeš (menuWillOpen).
   func render(_ w: Widget?) {
-    menu.removeAllItems()
+    last = w
     guard let w else {
       item.button?.title = "🕹✕"
+      item.button?.toolTip = "Kancl neběží (\(base))"
       side?.setTitle("Kancl neběží")
       side?.loaded = false
-      menu.addItem(withTitle: "Kancl neběží (\(base))", action: nil, keyEquivalent: "")
-      addFooter()
+      if menuOpen { rebuildMenu() }
       return
     }
-    last = w
     side?.ensureLoaded()
     item.button?.title = barTitle(w)
     side?.setTitle("Kancl · \(w.sessions.working)/\(w.sessions.total) pracuje" + (w.sessions.attention == 0 ? "" : " · \(w.sessions.attention) chce tě") + (w.night.fail > 0 ? " · 🌙✗\(w.night.fail)" : "") + (w.ci.isEmpty ? "" : " · CI✗\(w.ci.count)"))
     item.button?.toolTip = "Kancl · \(w.sessions.attention) chce tě"
+    if menuOpen { rebuildMenu() }
+  }
+
+  func menuWillOpen(_ menu: NSMenu) { menuOpen = true; rebuildMenu() }
+  func menuDidClose(_ menu: NSMenu) { menuOpen = false }
+
+  func rebuildMenu() {
+    menu.removeAllItems()
+    guard let w = last else {
+      menu.addItem(withTitle: "Kancl neběží (\(base))", action: nil, keyEquivalent: "")
+      addFooter()
+      return
+    }
     for l in lines(w) {
       if l.kind == "sep" { menu.addItem(.separator()); continue }
       let mi = NSMenuItem(title: l.text, action: nil, keyEquivalent: "")

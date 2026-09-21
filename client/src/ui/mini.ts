@@ -19,18 +19,35 @@ export class Mini {
   private root: HTMLElement;
   private sessions = new Map<string, Session>();
   private night: NightShift = { jobs: [], cloudSessions: [], scannedAt: 0 };
-
   private todo: Todo[] = [];
+  private lastHtml = '';
+  private lastSnapOld = false;
 
   constructor(host: HTMLElement, private onFocus: (id: string) => void, private onTodo?: (id: string) => void) {
     this.root = host;
-    window.setInterval(() => this.render(), 1000);
+    // panel visí na obrazovce celý den: překresluje se jen při změně dat,
+    // jednou za 10 s se jen přepíšou uplynulé časy
+    window.setInterval(() => this.tick(), 10_000);
+    this.render();
   }
 
   upsert(s: Session) { this.sessions.set(s.id, s); this.render(); }
   remove(id: string) { this.sessions.delete(id); this.render(); }
   setNight(n: NightShift) { this.night = n; this.render(); }
   setTodo(t: Todo[]) { this.todo = t; this.render(); }
+
+  /** Pomalý tik: přepsat časy, a když se změnilo stáří snímku cloudu, překreslit celé. */
+  private tick() {
+    const snapOld = this.snapOld();
+    if (snapOld !== this.lastSnapOld) { this.render(); return; }
+    this.root.querySelectorAll<HTMLElement>('.mago[data-since]').forEach(el => {
+      el.textContent = ago(Number(el.dataset.since));
+    });
+  }
+
+  private snapOld(): boolean {
+    return this.night.snapshotAt ? Date.now() - this.night.snapshotAt > 2 * 3600_000 : false;
+  }
 
   private render() {
     const all = [...this.sessions.values()];
@@ -39,15 +56,15 @@ export class Mini {
     const working = all.filter(s => s.status === 'working').length;
     const jobsOk = this.night.jobs.filter(j => j.state === 'ok').length;
     const jobsErr = this.night.jobs.filter(j => j.state === 'chyba').length;
-    const snapOld = this.night.snapshotAt ? Date.now() - this.night.snapshotAt > 2 * 3600_000 : false;
+    const snapOld = this.snapOld();
     const rows = queue.slice(0, 6).map(s => `
       <li class="mrow ${s.status}" data-id="${esc(s.id)}">
         <i></i>
         <span class="mname">${esc(s.title ?? s.name)}<small>${esc(s.project)}${s.title ? ' · ' + esc(s.name) : ''}</small>${s.folder ? `<small class="mfolder">📁 ${esc(s.folder)}</small>` : ''}</span>
         <span class="mst">${LABEL[s.status]}</span>
-        <span class="mago">${ago(s.statusSince)}</span>
+        <span class="mago" data-since="${s.statusSince}">${ago(s.statusSince)}</span>
       </li>`).join('');
-    this.root.innerHTML = `
+    const html = `
       <div class="mhead">
         <b>Kancl</b>
         <span>${all.length} sezení · ${working} pracuje${needs ? ` · <em>${needs} chce tě</em>` : ''}</span>
@@ -57,6 +74,11 @@ export class Mini {
       <div class="mfoot ${jobsErr ? 'err' : ''}">
         noční směna: ${jobsOk} ✓${jobsErr ? ` · <b>${jobsErr} ✗</b>` : ''}${snapOld ? ' · <span class="old">cloud zastaralý</span>' : ''}
       </div>`;
+    // beze změny dat se do DOM nesahá (jen časy v pomalém tiku)
+    if (html === this.lastHtml) return;
+    this.lastHtml = html;
+    this.lastSnapOld = snapOld;
+    this.root.innerHTML = html;
     this.root.querySelectorAll<HTMLElement>('.mrow').forEach(li => li.addEventListener('click', () => this.onFocus(li.dataset.id!)));
     this.root.querySelectorAll<HTMLElement>('.mt').forEach(el => el.addEventListener('click', () => this.onTodo?.(el.dataset.tid!)));
   }

@@ -24,7 +24,7 @@ export interface Config {
 const DEFAULTS: Config = {
   roots: ['~/Code'],
   hidden: [],
-  gitIntervalSec: 15,
+  gitIntervalSec: 120,   // stav gitu se v panelu neukazuje, stačí pomalu
   remoteIntervalMin: 5,
   gitlabHosts: ['gitlab.shean.dev'],
   groups: [
