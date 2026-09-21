@@ -59,6 +59,8 @@ func barTitle(_ w: Widget) -> String {
   var parts: [String] = []
   let count = { (st: String) in w.queue.filter { $0.status == st }.count }
   for st in ["permission", "error", "waiting"] { let n = count(st); if n > 0 { parts.append("\(STATUS_ICON[st]!)\(n)") } }
+  let done = count("completed")
+  if done > 0 { parts.append("✅\(done)") }
   if w.night.fail > 0 || !w.ci.isEmpty || w.stock.contains(where: { $0.alarm }) { parts.append("⚠︎") }
   if w.todoCount > 0 { parts.append("📥\(w.todoCount)") }
   return parts.isEmpty ? "🕹" : "🕹" + parts.joined(separator: "")

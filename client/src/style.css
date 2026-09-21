@@ -259,3 +259,8 @@ body.digest #app { display: none; }
 .mtdone { position: absolute; right: 0; top: 2px; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 5px; width: 18px; height: 18px; font-size: 10px; cursor: pointer; opacity: 0; padding: 0; }
 .mtodo .mt:hover .mtdone { opacity: 1; }
 .mtdone:hover { color: var(--completed); border-color: var(--completed); }
+
+.mprefs { display: inline-flex; gap: 2px; margin-left: 6px; }
+.mpref { background: none; border: 1px solid var(--line); border-radius: 10px; padding: 0 5px; font-size: 10px; line-height: 16px; cursor: pointer; opacity: .45; }
+.mpref.on { opacity: 1; border-color: var(--permission); }
+.mpref:hover { opacity: 1; }

@@ -67,3 +67,24 @@ test('markSeen: otevření z Kanclu označí hotové jako viděné', () => {
   st.markSeen('s1');
   assert.equal(st.sessions.get('s1')!.seen, true);
 });
+
+test('hotové a neviděné sezení po 10 minutách čeká na tebe', () => {
+  const st = new Store();
+  st.apply(ev('SessionStart'));
+  st.apply(ev('Stop', { last_assistant_message: 'hotovo' }));
+  const s = st.sessions.get('s1')!;
+  s.statusSince -= 11 * 60_000;
+  st.tick(() => true);
+  assert.equal(s.status, 'waiting');
+});
+
+test('hotové a otevřené sezení neeskaluje', () => {
+  const st = new Store();
+  st.apply(ev('SessionStart'));
+  st.apply(ev('Stop'));
+  const s = st.sessions.get('s1')!;
+  s.seen = true;
+  s.statusSince -= 11 * 60_000;
+  st.tick(() => true);
+  assert.equal(s.status, 'completed');
+});

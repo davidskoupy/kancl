@@ -23,7 +23,13 @@ export class Mini {
   private lastHtml = '';
   private lastSnapOld = false;
 
-  constructor(host: HTMLElement, private onFocus: (id: string) => void, private onTodo?: (id: string) => void, private onTodoDone?: (id: string) => void) {
+  constructor(
+    host: HTMLElement,
+    private onFocus: (id: string) => void,
+    private onTodo?: (id: string) => void,
+    private onTodoDone?: (id: string) => void,
+    private prefs?: { get: () => { notify: boolean; sound: boolean }; setNotify: (on: boolean) => Promise<boolean>; setSound: (on: boolean) => void },
+  ) {
     this.root = host;
     // panel visí na obrazovce celý den: překresluje se jen při změně dat,
     // jednou za 10 s se jen přepíšou uplynulé časy
@@ -71,6 +77,7 @@ export class Mini {
       <div class="mhead">
         <b>Kancl</b>
         <span>${all.length} sezení · ${working} pracuje${needs ? ` · <em>${needs} chce tě</em>` : ''}</span>
+        ${this.prefs ? `<span class="mprefs"><button class="mpref ${this.prefs.get().notify ? 'on' : ''}" data-pref="notify" title="Systémová upozornění, když tě někdo potřebuje">🔔</button><button class="mpref ${this.prefs.get().sound ? 'on' : ''}" data-pref="sound" title="Pípnutí při dotazu a chybě">${this.prefs.get().sound ? '🔊' : '🔈'}</button></span>` : ''}
       </div>
       <ul class="mlist">${rows || '<li class="mempty">nikdo tě nepotřebuje</li>'}</ul>
       ${workingProjects.length ? `<div class="mwork">v práci: ${workingProjects.map(esc).join(' · ')}</div>` : ''}
@@ -86,5 +93,12 @@ export class Mini {
     this.root.querySelectorAll<HTMLElement>('.mrow').forEach(li => li.addEventListener('click', () => this.onFocus(li.dataset.id!)));
     this.root.querySelectorAll<HTMLElement>('.mt').forEach(el => el.addEventListener('click', () => this.onTodo?.(el.dataset.tid!)));
     this.root.querySelectorAll<HTMLElement>('[data-tdone]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); this.onTodoDone?.(b.dataset.tdone!); }));
+    this.root.querySelectorAll<HTMLElement>('[data-pref]').forEach(b => b.addEventListener('click', async () => {
+      if (!this.prefs) return;
+      if (b.dataset.pref === 'notify') await this.prefs.setNotify(!this.prefs.get().notify);
+      else this.prefs.setSound(!this.prefs.get().sound);
+      this.lastHtml = '';   // vynutit překreslení hlavičky
+      this.render();
+    }));
   }
 }

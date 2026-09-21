@@ -337,6 +337,12 @@ export class Store {
     const now = Date.now();
     for (const s of this.sessions.values()) {
       let changed = false;
+      // hotové a neviděné po 10 minutách = čeká na tebe (dřív to bylo po 3 min a bez ohledu na to,
+      // jestli jsi ho otevřel; seen se bere z času otevření v aplikaci Claude)
+      if (s.status === 'completed' && !s.seen && now - s.statusSince > 10 * 60_000) {
+        s.message = s.message ?? 'Dokončeno, čeká na tebe';
+        this.setStatus(s, 'waiting'); changed = true;
+      }
       if (s.status === 'error' && now - s.statusSince > 20_000) {
         this.setStatus(s, 'working'); changed = true;
       }

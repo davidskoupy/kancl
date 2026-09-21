@@ -10,7 +10,8 @@ async function bootMini() {
   const host = document.getElementById('mini')!;
   host.hidden = false;
   let client: KanclClient;
-  const mini = new Mini(host, async id => { try { await client.focus(id); } catch { /* server neodpovídá */ } }, async id => { try { await client.todoFocus(id); } catch { /* server neodpovídá */ } }, async id => { try { await client.todoDismiss(id); } catch { /* server neodpovídá */ } });
+  const mini = new Mini(host, async id => { try { await client.focus(id); } catch { /* server neodpovídá */ } }, async id => { try { await client.todoFocus(id); } catch { /* server neodpovídá */ } }, async id => { try { await client.todoDismiss(id); } catch { /* server neodpovídá */ } },
+    { get: () => ({ notify: attention.notify, sound: attention.sound }), setNotify: on => attention.setNotify(on), setSound: on => attention.setSound(on) });
   client = new KanclClient({
     onUpsert: s => mini.upsert(s),
     onRemove: id => mini.remove(id),
