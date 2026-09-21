@@ -18,6 +18,7 @@ export interface CloudSnapshot { version?: number; takenAt?: number | string; ro
 export interface ParsedCloud { jobs: Job[]; sessions: CloudSession[]; takenAt?: number; error?: string }
 
 const RESULT_WINDOW = 3 * 3600_000;
+const STALE = 7 * 24 * 3600_000;   // vypnutá routina se po týdnu přestane ukazovat
 
 function ms(v?: string | number | null): number | undefined {
   if (v === undefined || v === null || v === '') return undefined;
@@ -51,7 +52,13 @@ export function parseCloudSnapshot(text: string | undefined, now: number, offset
   let snap: CloudSnapshot;
   try { snap = JSON.parse(text); } catch { return { jobs: [], sessions: [], error: 'cloud.json se nedá načíst' }; }
   const takenAt = ms(snap.takenAt);
-  const jobs: Job[] = (snap.routines ?? []).map(r => {
+  const jobs: Job[] = (snap.routines ?? []).filter(r => {
+    const off = r.enabled === false || !!r.endedReason;
+    if (!off) return true;
+    const last = ms(r.lastRun?.finishedAt) ?? ms(r.lastRun?.firedAt);
+    const next = ms(r.nextRunAt);
+    return (!!next && next > now) || (!!last && now - last <= STALE);
+  }).map(r => {
     const cron = r.cron || undefined;
     const fireAt = ms(r.runOnceAt);
     const lastRunAt = ms(r.lastRun?.firedAt);

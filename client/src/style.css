@@ -252,3 +252,10 @@ body.digest #app { display: none; }
 /* hotové a už viděné sezení: ztlumit */
 .session.seen .bar { opacity: .35; }
 .session.seen .status { opacity: .55; }
+
+/* panel: co se zrovna dělá + odškrtnutí v K dokončení */
+.mwork { color: var(--muted); font-size: 11px; padding: 2px 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mtodo .mt { position: relative; padding-right: 20px; }
+.mtdone { position: absolute; right: 0; top: 2px; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 5px; width: 18px; height: 18px; font-size: 10px; cursor: pointer; opacity: 0; padding: 0; }
+.mtodo .mt:hover .mtdone { opacity: 1; }
+.mtdone:hover { color: var(--completed); border-color: var(--completed); }

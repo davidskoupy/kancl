@@ -9,7 +9,7 @@ const snap = {
     { id: 'a', name: 'Páteční revize', cron: '0 14 * * 5', enabled: true, nextRunAt: '2026-09-11T14:01:00Z', lastRun: { firedAt: '2026-09-08T18:00:00Z', finishedAt: '2026-09-08T18:02:00Z', status: 'ok' }, model: 'claude-opus-4-8', url: 'https://claude.ai/code/routines/a' },
     { id: 'b', name: 'Selhává', cron: '0 6 * * 1-5', enabled: true, lastRun: { firedAt: '2026-09-08T19:00:00Z', finishedAt: '2026-09-08T19:01:00Z', status: 'fail' } },
     { id: 'c', name: 'Běží', cron: '0 * * * *', enabled: true, lastRun: { firedAt: '2026-09-08T19:58:00Z', status: 'running' } },
-    { id: 'd', name: 'Jednorázová', runOnceAt: '2026-08-26T07:00:00Z', enabled: false, endedReason: 'run_once_fired', lastRun: { firedAt: '2026-08-26T07:03:00Z', finishedAt: '2026-08-26T07:05:00Z', status: 'ok' } },
+    { id: 'd', name: 'Jednorázová', runOnceAt: '2026-09-06T07:00:00Z', enabled: false, endedReason: 'run_once_fired', lastRun: { firedAt: '2026-09-06T07:03:00Z', finishedAt: '2026-09-06T07:05:00Z', status: 'ok' } },  // do týdne → ještě se ukáže
     { id: 'e', name: 'Dávno', cron: '0 7 1,15 * *', enabled: true, nextRunAt: '2026-09-15T07:06:00Z', lastRun: { firedAt: '2026-09-03T18:28:00Z', finishedAt: '2026-09-03T18:28:12Z', status: 'ok' } },
   ],
   sessions: [
@@ -34,6 +34,15 @@ test('parseCloudSnapshot: stavy routin', () => {
   assert.equal(by['routine:e'].nextRunAt, Date.parse('2026-09-15T07:06:00Z'));
   assert.equal(out.takenAt, now - 60_000);
   assert.ok(out.jobs.every(j => j.source === 'routine'));
+});
+
+test('parseCloudSnapshot: dávno vypnutá routina se neukazuje', () => {
+  const stale = { ...snap, routines: [
+    { id: 'old', name: 'Vypnutá dávno', cron: '0 8 * * 1-5', enabled: false, lastRun: { firedAt: '2026-08-20T08:00:00Z', finishedAt: '2026-08-20T08:01:00Z', status: 'ok' } },
+    { id: 'recent', name: 'Vypnutá včera', cron: '0 8 * * 1-5', enabled: false, lastRun: { firedAt: '2026-09-07T20:00:00Z', finishedAt: '2026-09-07T20:01:00Z', status: 'ok' } },
+  ] };
+  const out = parseCloudSnapshot(JSON.stringify(stale), now, 120);
+  assert.deepEqual(out.jobs.map(j => j.name), ['Vypnutá včera']);
 });
 
 test('parseCloudSnapshot: filtr sezení', () => {

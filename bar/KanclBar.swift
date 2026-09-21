@@ -332,6 +332,8 @@ final class Bar: NSObject, NSMenuDelegate {
   var last: Widget?
   var side: SidePanel?
   var menuOpen = false
+  var lastOkAt = Date()          // poslední úspěšný dotaz na server
+  var panelOkAt = Date()         // panel naposledy načtený
 
   func start() {
     NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleURL(_:with:)), forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
@@ -345,7 +347,19 @@ final class Bar: NSObject, NSMenuDelegate {
   }
 
   func refresh() {
+    // tep pro hlídače (bin/run-bar.sh): dokazuje, že běhová smyčka žije
+    try? String(Int(Date().timeIntervalSince1970)).write(toFile: NSString(string: "~/.kancl/bar.heartbeat").expandingTildeInPath, atomically: true, encoding: .utf8)
     fetchWidget { w in DispatchQueue.main.async { self.render(w) } }
+    // panel, který se přes pět minut nenačetl, postavit znovu
+    if let s = side, s.isVisible {
+      if s.loaded { panelOkAt = Date() }
+      else if Date().timeIntervalSince(panelOkAt) > 300 {
+        panelOkAt = Date()
+        s.hide()
+        side = SidePanel()
+        side?.show()
+      }
+    }
   }
 
   /// Každé 3 s: jen titulek a panel. Menu se staví až když ho otevřeš (menuWillOpen).
@@ -359,6 +373,7 @@ final class Bar: NSObject, NSMenuDelegate {
       if menuOpen { rebuildMenu() }
       return
     }
+    lastOkAt = Date()
     side?.ensureLoaded()
     item.button?.title = barTitle(w)
     side?.setTitle("Kancl · \(w.sessions.working)/\(w.sessions.total) pracuje" + (w.sessions.attention == 0 ? "" : " · \(w.sessions.attention) chce tě") + (w.night.fail > 0 ? " · 🌙✗\(w.night.fail)" : "") + (w.ci.isEmpty ? "" : " · CI✗\(w.ci.count)"))
