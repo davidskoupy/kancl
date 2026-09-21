@@ -10,6 +10,8 @@ async function bootMini() {
   const host = document.getElementById('mini')!;
   host.hidden = false;
   let client: KanclClient;
+  // attention musí vzniknout dřív než panel: hlavička si hned při prvním vykreslení čte stav přepínačů
+  const attention = new Attention({ onOpen: id => client.focus(id) });
   const mini = new Mini(host, async id => { try { await client.focus(id); } catch { /* server neodpovídá */ } }, async id => { try { await client.todoFocus(id); } catch { /* server neodpovídá */ } }, async id => { try { await client.todoDismiss(id); } catch { /* server neodpovídá */ } },
     { get: () => ({ notify: attention.notify, sound: attention.sound }), setNotify: on => attention.setNotify(on), setSound: on => attention.setSound(on) });
   client = new KanclClient({
@@ -20,7 +22,6 @@ async function bootMini() {
     onNight: n => mini.setNight(n),
     onTodo: t => mini.setTodo(t),
   });
-  const attention = new Attention({ onOpen: id => client.focus(id) });
   client.events.onNight = n => { mini.setNight(n); attention.setNight(n); };
   client.events.onUpsert = s => { mini.upsert(s); attention.upsert(s); };
   client.events.onRemove = id => { mini.remove(id); attention.remove(id); };
