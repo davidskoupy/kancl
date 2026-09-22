@@ -88,3 +88,13 @@ test('hotové a otevřené sezení neeskaluje', () => {
   st.tick(() => true);
   assert.equal(s.status, 'completed');
 });
+
+test('Stop nastaví hodinové vypršení, nový prompt ho zruší', () => {
+  const st = new Store();
+  st.apply(ev('SessionStart'));
+  st.apply(ev('Stop'));
+  const s = st.sessions.get('s1')!;
+  assert.ok(s.autoHideAt && s.autoHideAt > Date.now() + 55 * 60_000);
+  st.apply(ev('UserPromptSubmit', { user_prompt: 'dál' }));
+  assert.equal(s.autoHideAt, undefined);
+});

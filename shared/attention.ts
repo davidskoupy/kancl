@@ -8,8 +8,8 @@
 import type { Session, SessionStatus } from './types.ts';
 
 export const NEEDS_YOU: SessionStatus[] = ['permission', 'error', 'waiting'];
-export const COMPLETED_VISIBLE_MS = 30 * 60_000;
-export const COMPLETED_VISIBLE_DESKTOP_MS = 12 * 3600_000;
+/** Dokončené sezení zmizí z fronty po hodině, i když ses na něj nepodíval. */
+export const COMPLETED_VISIBLE_MS = 60 * 60_000;
 
 const RANK: Record<SessionStatus, number> = { permission: 0, error: 1, waiting: 2, completed: 3, working: 4, idle: 5 };
 
@@ -17,12 +17,18 @@ export function needsYou(s: Session): boolean {
   return NEEDS_YOU.includes(s.status);
 }
 
-/** Patří sezení do fronty (seznam „chce tě" + neviděné hotové)? */
+/** Do kdy se dokončené sezení ještě ukazuje (nastavuje se při Stop). */
+function hideAt(s: Session): number {
+  return s.autoHideAt ?? s.statusSince + COMPLETED_VISIBLE_MS;
+}
+
+/** Patří sezení do fronty (seznam „chce tě" + čerstvě hotové)? */
 export function inQueue(s: Session, now = Date.now()): boolean {
-  if (needsYou(s)) return true;
-  if (s.status !== 'completed' || s.seen) return false;
-  const limit = s.desktopId ? COMPLETED_VISIBLE_DESKTOP_MS : COMPLETED_VISIBLE_MS;
-  return now - s.statusSince < limit;
+  if (s.status === 'completed') return !s.seen && now < hideAt(s);
+  if (!needsYou(s)) return false;
+  // „čeká" vzniklé eskalací z hotového má také svůj čas vypršení; skutečná otázka ne
+  if (s.status === 'waiting' && s.autoHideAt !== undefined) return now < s.autoHideAt;
+  return true;
 }
 
 /** Fronta: nejdřív dotazy, chyby a otázky, pak neviděné hotové; uvnitř nejdéle čekající první. */

@@ -147,6 +147,7 @@ export interface Session {
   title?: string;           // název sezení z desktopové aplikace Claude
   desktopId?: string;       // local_… pro deep link claude://code/continue?session=
   seen?: boolean;           // hotové sezení už otevřené v aplikaci Claude
+  autoHideAt?: number;      // dokončené sezení zmizí z fronty nejpozději v tenhle čas
   projectId?: string;       // Project.id, pokud cwd leží v naskenovaném projektu
   status: SessionStatus;
   statusSince: number;

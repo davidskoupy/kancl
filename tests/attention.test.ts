@@ -18,15 +18,20 @@ test('chce tě jen dotaz, chyba a otázka', () => {
   assert.equal(needsYou(mk('a', 'working', now)), false);
 });
 
-test('hotové z terminálu je ve frontě 30 min, pak zmizí', () => {
+test('hotové je ve frontě hodinu, pak zmizí', () => {
   assert.equal(inQueue(mk('a', 'completed', now - 5 * min), now), true);
-  assert.equal(inQueue(mk('a', 'completed', now - 31 * min), now), false);
+  assert.equal(inQueue(mk('a', 'completed', now - 61 * min), now), false);
+  assert.equal(inQueue(mk('a', 'completed', now - 5 * min, { autoHideAt: now - min }), now), false);
 });
 
-test('hotové z aplikace zmizí po otevření, jinak nejdéle 12 h', () => {
-  assert.equal(inQueue(mk('a', 'completed', now - 2 * 60 * min, { desktopId: 'local_x' }), now), true);
+test('hotové zmizí hned po otevření v aplikaci', () => {
   assert.equal(inQueue(mk('a', 'completed', now - 5 * min, { desktopId: 'local_x', seen: true }), now), false);
-  assert.equal(inQueue(mk('a', 'completed', now - 13 * 60 * min, { desktopId: 'local_x' }), now), false);
+});
+
+test('eskalované „čeká" vyprší taky, skutečná otázka ne', () => {
+  assert.equal(inQueue(mk('a', 'waiting', now - 5 * min, { autoHideAt: now - min }), now), false);
+  assert.equal(inQueue(mk('a', 'waiting', now - 5 * min, { autoHideAt: now + 30 * min }), now), true);
+  assert.equal(inQueue(mk('a', 'waiting', now - 5 * 60 * min), now), true);
 });
 
 test('pořadí fronty: dotaz, chyba, otázka, hotové; uvnitř nejdéle čekající', () => {

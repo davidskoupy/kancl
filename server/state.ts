@@ -185,6 +185,7 @@ export class Store {
         break;
 
       case 'UserPromptSubmit':
+        s.autoHideAt = undefined;
         s.turns++;
         s.prompt = short(hook.user_prompt ?? hook.prompt, 120);
         s.message = undefined;
@@ -257,6 +258,7 @@ export class Store {
       }
 
       case 'Stop':
+        s.autoHideAt = Date.now() + 60 * 60_000;   // z fronty zmizí nejpozději za hodinu
         s.message = short(hook.last_assistant_message, 160) || undefined;
         s.activity = 'think';
         this.setStatus(s, 'completed');
