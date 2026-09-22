@@ -86,7 +86,7 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
     out.append(("K dokončení · \(w.todoCount)", "head", nil))
     for t in w.todo {
       let mark = t.error != nil ? "‼️" : t.starred ? "★" : "📥"
-      out.append(("\(mark) \(t.title) [\(t.project)] · \(ago(t.at))", "todo", t.title))
+      out.append(("\(mark) \(t.title) [\(t.project)] · \(ago(t.at))", "todo", t.id))
       if let f = t.folder, !f.isEmpty { out.append(("      📁 \(f)", "muted", nil)) }
     }
   }
@@ -144,12 +144,15 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     set { UserDefaults.standard.set(newValue, forKey: "notifySound") }
   }
 
-  func post(key: String, title: String, body: String, sessionTitle: String?) {
+  /// zvuk podle druhu: hotovo jinak než dotaz nebo chyba
+  static let sounds: [String: String] = ["permission": "Submarine", "error": "Basso", "waiting": "Tink", "completed": "Glass", "job": "Basso"]
+
+  func post(key: String, title: String, body: String, sessionTitle: String?, kind: String = "permission") {
     guard enabled, !sent.contains(key) else { return }
     sent.insert(key)
     if sent.count > 500 { sent.removeAll() }
     if !authorized {
-      if soundOn { NSSound(named: "Submarine")?.play() }
+      if soundOn { NSSound(named: NSSound.Name(Notifier.sounds[kind] ?? "Submarine"))?.play() }
       DispatchQueue.main.async { self.fallback?(title, body) }
       return
     }
@@ -355,6 +358,12 @@ func axChildren(_ el: AXUIElement) -> [AXUIElement] {
 /// Najde v AX stromu aplikace Claude prvek, jehož název/popis/hodnota se rovná (nebo obsahuje) `title`.
 func axFind(root: AXUIElement, title: String, maxNodes: Int = 20000) -> AXUIElement? {
   let want = title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  // postranní panel aplikace názvy zkracuje („Fix pre-existing promo-header…"), proto porovnáváme i prefixy
+  func trimEllipsis(_ s: String) -> String {
+    var t = s
+    while let last = t.last, last == "…" || last == "." || last == " " { t.removeLast() }
+    return t
+  }
   var queue: [AXUIElement] = [root]
   var seen = 0
   var partial: AXUIElement?
@@ -363,7 +372,10 @@ func axFind(root: AXUIElement, title: String, maxNodes: Int = 20000) -> AXUIElem
     let texts = [axString(el, kAXTitleAttribute as String), axString(el, kAXDescriptionAttribute as String), axString(el, kAXValueAttribute as String)]
       .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty }
     if texts.contains(want) { return el }
-    if partial == nil, texts.contains(where: { $0.hasPrefix(want) || $0.contains(want) }) { partial = el }
+    if partial == nil, texts.contains(where: { t in
+      let cut = trimEllipsis(t)
+      return cut.count >= 10 && (want.hasPrefix(cut) || cut.hasPrefix(want) || t.contains(want))
+    }) { partial = el }
     queue.append(contentsOf: axChildren(el))
   }
   return partial
@@ -392,6 +404,11 @@ func axPress(_ el: AXUIElement) -> Bool {
   return true
 }
 
+/// Electron zpřístupní obsah okna až po nastavení AXManualAccessibility (jinak vidíme jen prázdnou skupinu).
+func axEnableElectronAccessibility(_ app: AXUIElement) {
+  AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+}
+
 enum AXFocusResult { case ok, noPermission, appNotRunning, notFound }
 
 var axPromptShown = false
@@ -411,8 +428,9 @@ func axFocusSession(title: String) -> AXFocusResult {
   guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: CLAUDE_BUNDLE).first else { return .appNotRunning }
   app.activate(options: [])
   let root = AXUIElementCreateApplication(app.processIdentifier)
-  // dáme aplikaci chvilku, aby byla vpředu, a hledáme
-  usleep(150_000)
+  axEnableElectronAccessibility(root)
+  // dáme aplikaci chvilku, aby byla vpředu a zpřístupnila obsah okna
+  usleep(600_000)
   guard let el = axFind(root: root, title: title) else { return .notFound }
   return axPress(el) ? .ok : .notFound
 }
@@ -488,10 +506,10 @@ final class Bar: NSObject, NSMenuDelegate {
       let where_ = q.project.map { " · \($0)" } ?? ""
       Notifier.shared.post(key: "s:\(q.id):\(q.status):\(Int(q.since))",
                            title: "\(STATUS_ICON[q.status] ?? "•") \(q.name)\(where_)",
-                           body: q.message ?? what, sessionTitle: q.nick != nil ? q.name : nil)
+                           body: q.message ?? what, sessionTitle: q.nick != nil ? q.name : nil, kind: q.status)
     }
     for j in w.night.jobs where j.state == "chyba" {
-      Notifier.shared.post(key: "j:\(j.id):\(Int(j.lastRunAt ?? 0))", title: "🌙 \(j.name) selhala", body: j.resultText ?? "noční úloha skončila chybou", sessionTitle: nil)
+      Notifier.shared.post(key: "j:\(j.id):\(Int(j.lastRunAt ?? 0))", title: "🌙 \(j.name) selhala", body: j.resultText ?? "noční úloha skončila chybou", sessionTitle: nil, kind: "job")
     }
   }
 
@@ -537,7 +555,10 @@ final class Bar: NSObject, NSMenuDelegate {
   /// panel je schovaný: ukázat ho, ať je upozornění vidět
   func showPanelFlash(title: String, body: String) { showPanel(); side?.flash(title: title, body: body) }
   @objc func testNotify() {
-    Notifier.shared.post(key: "test:\(Int(Date().timeIntervalSince1970))", title: "🕹 Kancl", body: "Zkušební upozornění — takhle ti dám vědět, že tě někdo potřebuje.", sessionTitle: nil)
+    Notifier.shared.post(key: "test:\(Int(Date().timeIntervalSince1970))", title: "🕹 Kancl", body: "Zkušební upozornění — takhle ti dám vědět, že tě někdo potřebuje.", sessionTitle: nil, kind: "permission")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+      Notifier.shared.post(key: "test2:\(Int(Date().timeIntervalSince1970))", title: "✅ Kancl", body: "A takhle zní dokončené sezení.", sessionTitle: nil, kind: "completed")
+    }
   }
   @objc func openAX() { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!) }
   @objc func collapsePanel() { side?.toggleCollapse() }
@@ -571,11 +592,8 @@ final class Bar: NSObject, NSMenuDelegate {
 
   @objc func focus(_ sender: NSMenuItem) {
     guard let id = sender.representedObject as? String else { return }
-    if let s = last?.queue.first(where: { $0.id == id }), s.nick != nil {
-      // desktopové sezení (má název z aplikace): přepnout přes Accessibility
+    if let s = last?.queue.first(where: { $0.id == id }) {
       NSPasteboard.general.clearContents(); NSPasteboard.general.setString(s.name, forType: .string)
-      DispatchQueue.global().async { let r = axFocusSession(title: s.name); DispatchQueue.main.async { self.reportAX(r, title: s.name) } }
-      return
     }
     guard let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
           let url = URL(string: "\(base)/api/sessions/\(enc)/focus") else { return }
@@ -584,9 +602,14 @@ final class Bar: NSObject, NSMenuDelegate {
   }
 
   @objc func focusTodo(_ sender: NSMenuItem) {
-    guard let title = sender.representedObject as? String else { return }
-    NSPasteboard.general.clearContents(); NSPasteboard.general.setString(title, forType: .string)
-    DispatchQueue.global().async { let r = axFocusSession(title: title); DispatchQueue.main.async { self.reportAX(r, title: title) } }
+    guard let id = sender.representedObject as? String,
+          let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+          let url = URL(string: "\(base)/api/todo/\(enc)/focus") else { return }
+    if let t = last?.todo.first(where: { $0.id == id }) {
+      NSPasteboard.general.clearContents(); NSPasteboard.general.setString(t.title, forType: .string)
+    }
+    var req = URLRequest(url: url); req.httpMethod = "POST"
+    URLSession.shared.dataTask(with: req).resume()
   }
 
   func reportAX(_ r: AXFocusResult, title: String) {
@@ -621,6 +644,27 @@ final class Bar: NSObject, NSMenuDelegate {
 }
 
 // ---- vstup -----------------------------------------------------------------
+if CommandLine.arguments.contains("--ax-dump") {
+  // vývojová pomůcka: co aplikace Claude vůbec zpřístupňuje (hledání sezení stojí na tomhle)
+  guard AXIsProcessTrusted() else { print("bez povolení Přístupnosti"); exit(1) }
+  guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: CLAUDE_BUNDLE).first else { print("aplikace Claude neběží"); exit(1) }
+  let root = AXUIElementCreateApplication(app.processIdentifier)
+  axEnableElectronAccessibility(root)
+  usleep(800_000)
+  var queue: [(AXUIElement, Int)] = [(root, 0)]
+  var seen = 0, printed = 0
+  while !queue.isEmpty && seen < 30000 && printed < 80 {
+    let (el, depth) = queue.removeFirst(); seen += 1
+    let role = axString(el, kAXRoleAttribute as String) ?? "?"
+    let texts = [axString(el, kAXTitleAttribute as String), axString(el, kAXDescriptionAttribute as String), axString(el, kAXValueAttribute as String)]
+      .compactMap { $0 }.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    if !texts.isEmpty { print("\(String(repeating: " ", count: min(depth, 12)))\(role): \(texts.joined(separator: " | ").prefix(90))"); printed += 1 }
+    for c in axChildren(el) { queue.append((c, depth + 1)) }
+  }
+  print("— prošlo \(seen) prvků")
+  exit(0)
+}
+
 if CommandLine.arguments.contains("--notify-test") {
   let app = NSApplication.shared
   app.setActivationPolicy(.accessory)

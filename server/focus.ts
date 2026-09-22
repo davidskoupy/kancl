@@ -23,19 +23,16 @@ function esc(s: string) {
  * Returns a short description of what it did.
  */
 export async function focusTerminal(t: TerminalInfo, desktopId?: string, title?: string): Promise<string> {
-  // KanclBar (menu bar) umí přepnout sezení v aplikaci Claude přes Accessibility — když běží, pošleme mu název
-  if (desktopId && title) {
-    const q = new URLSearchParams({ title }).toString();
-    const ok = await run('open', ['-g', `kanclbar://focus?${q}`], { timeout: 3000 }).then(() => true).catch(() => false);
-    if (ok) return `aplikace Claude: přepínám na „${title}" (KanclBar)`;
-  }
-  // Desktopová aplikace Claude: deep link claude://code/continue?session=local_… existuje v bundlu,
-  // ale v aktuální verzi (1.46388) je za feature flagem a nic nedělá — posíláme ho pro případ, že se zapne,
-  // a spolehlivě aspoň aktivujeme aplikaci. Název sezení dává klient do schránky.
+  // 1) oficiální odkaz aplikace Claude na konkrétní sezení
   if (desktopId && /^local_[A-Za-z0-9-]{1,64}$/.test(desktopId)) {
     await run('open', [`claude://code/continue?session=${desktopId}`], { timeout: 3000 }).catch(() => {});
     await run('open', ['-b', 'com.anthropic.claudefordesktop'], { timeout: 3000 }).catch(() => {});
-    return 'aplikace Claude aktivována (přepnutí na sezení aplikace zatím neumí, název je ve schránce)';
+    // 2) záloha: KanclBar zkusí sezení najít v postranním panelu přes Přístupnost
+    if (title) {
+      const q = new URLSearchParams({ title }).toString();
+      await run('open', ['-g', `kanclbar://focus?${q}`], { timeout: 3000 }).catch(() => {});
+    }
+    return `aplikace Claude: otevírám „${title ?? desktopId}"`;
   }
   const program = t.program ?? '';
   const bundle = t.bundleId ?? '';
