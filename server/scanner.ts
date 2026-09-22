@@ -7,6 +7,7 @@ import { expandHome, gitlabToken } from './config.ts';
 import { groupFolders, fillStatus, sortProjects, projectIdForCwd, assignGroups, type FolderInfo } from './projects.ts';
 import type { Store } from './state.ts';
 import type { CiRun, CiState, MergeRequest, Project, Worktree } from '../shared/types.ts';
+import { isCiStale } from '../shared/ci.ts';
 
 const run = promisify(execFile);
 const GIT_TIMEOUT = 3000;
@@ -87,7 +88,9 @@ async function githubRuns(id: string): Promise<CiState> {
     status: r.status !== 'completed' ? 'running' : r.conclusion === 'success' || r.conclusion === 'skipped' || r.conclusion === 'neutral' ? 'ok' : 'fail',
   }));
   const top = runs[0];
-  return top ? { status: top.status, name: top.name, at: top.at, url: top.url, runs } : { status: 'none', runs: [] };
+  if (!top) return { status: 'none', runs: [] };
+  const ci: CiState = { status: top.status, name: top.name, at: top.at, url: top.url, runs };
+  return { ...ci, stale: isCiStale(ci) };
 }
 
 async function gitlabMrs(id: string, token: string): Promise<MergeRequest[]> {

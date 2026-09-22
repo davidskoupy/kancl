@@ -385,7 +385,7 @@ export class Panel {
     const dirty = p.worktrees.reduce((a, w) => a + w.dirty, 0);
     if (dirty) parts.push(`<b>${dirty} ${plural(dirty, 'změna', 'změny', 'změn')}</b>`);
     if (p.mrs.length) parts.push(`${p.mrs.length} PR/MR`);
-    if (p.ci?.status === 'fail') parts.push(`<b class="ci fail">CI ✗</b>`);
+    if (p.ci?.status === 'fail') parts.push(p.ci.stale ? `<span class="ci stale" title="padá déle než týden">CI ✗</span>` : `<b class="ci fail">CI ✗</b>`);
     else if (p.ci?.status === 'running') parts.push(`<span class="ci run">CI …</span>`);
     const oldest = Math.min(...p.worktrees.map(w => w.dirtyOldest ?? Infinity));
     if (dirty && Number.isFinite(oldest) && Date.now() - oldest > 3 * 86_400_000) parts.push(`nejstarší ${Math.floor((Date.now() - oldest) / 86_400_000)} d`);

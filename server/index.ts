@@ -11,6 +11,7 @@ import { Scanner } from './scanner.ts';
 import { NightScanner } from './nightScanner.ts';
 import { DesktopIndex, buildTodo } from './desktop.ts';
 import { attentionQueue, needsYou } from '../shared/attention.ts';
+import { isCiStale } from '../shared/ci.ts';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import type { Todo } from '../shared/types.ts';
 import { History, digest as buildDigest } from './history.ts';
@@ -187,7 +188,7 @@ const server = http.createServer(async (req, res) => {
       const from = Number(url.searchParams.get('since') ?? yesterday18) || yesterday18;
       const d = buildDigest(history.events, from, to);
       const waiting = store.list().filter(s => s.status === 'permission' || s.status === 'waiting' || s.status === 'error').map(s => ({ id: s.id, name: s.title ?? s.name, status: s.status, since: s.statusSince, project: s.project, message: s.message }));
-      const ci = scanner.projects.filter(p => p.ci?.status === 'fail').map(p => ({ project: p.name, name: p.ci!.name, at: p.ci!.at, url: p.ci!.url }));
+      const ci = scanner.projects.filter(p => p.ci?.status === 'fail').map(p => ({ project: p.name, name: p.ci!.name, at: p.ci!.at, url: p.ci!.url, stale: isCiStale(p.ci) })).sort((a, b) => Number(a.stale) - Number(b.stale));
       return json(res, 200, { ...d, waitingNow: waiting, ciFailingNow: ci, stockNow: night.night.stock, snapshotAt: night.night.snapshotAt });
     }
 
@@ -231,7 +232,7 @@ const server = http.createServer(async (req, res) => {
           nextName: upcoming?.name ?? null, nextAt: upcoming?.nextRunAt ?? null,
           jobs: jobs.map(j => ({ id: j.id, name: j.name, state: j.state, lastRunAt: j.lastRunAt ?? null, resultText: j.lastResult?.resultText ?? null })),
         },
-        ci: scanner.projects.filter(p => p.ci?.status === 'fail').map(p => ({ project: p.name, name: p.ci!.name ?? null, url: p.ci!.url ?? null })),
+        ci: scanner.projects.filter(p => p.ci?.status === 'fail').map(p => ({ project: p.name, name: p.ci!.name ?? null, url: p.ci!.url ?? null, at: p.ci!.at ?? null, stale: isCiStale(p.ci) })),
         stock: night.night.stock?.items ?? [],
         todo: todo.slice(0, 8).map(t => ({ id: t.desktopId, title: t.title, project: t.project, folder: t.folder ?? null, at: t.lastActivityAt, starred: t.starred, error: t.error ?? null })),
         todoCount: todo.length,

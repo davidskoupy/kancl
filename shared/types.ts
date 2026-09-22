@@ -55,7 +55,7 @@ export interface MergeRequest {
 }
 
 export interface CiRun { name: string; title?: string; status: 'ok' | 'fail' | 'running'; at: number; url: string }
-export interface CiState { status: 'ok' | 'fail' | 'running' | 'none'; name?: string; at?: number; url?: string; runs: CiRun[] }
+export interface CiState { status: 'ok' | 'fail' | 'running' | 'none'; name?: string; at?: number; url?: string; stale?: boolean; runs: CiRun[] }
 
 export interface Project {
   id: string;            // normalizovaný remote (host/cesta) nebo absolutní cesta složky

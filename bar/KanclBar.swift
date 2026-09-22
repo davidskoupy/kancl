@@ -12,7 +12,7 @@ import WebKit
 struct WQueue: Decodable { let id: String; let name: String; let nick: String?; let status: String; let since: Double; let project: String?; let folder: String?; let message: String? }
 struct WJob: Decodable { let id: String; let name: String; let state: String; let lastRunAt: Double?; let resultText: String? }
 struct WNight: Decodable { let ok: Int; let fail: Int; let running: Int; let sleeping: Int; let snapshotAt: Double?; let snapshotOld: Bool; let nextName: String?; let nextAt: Double?; let jobs: [WJob] }
-struct WCi: Decodable { let project: String; let name: String?; let url: String? }
+struct WCi: Decodable { let project: String; let name: String?; let url: String?; let at: Double?; let stale: Bool? }
 struct WStock: Decodable { let project: String; let pending: Int; let alarm: Bool }
 struct WSessions: Decodable { let total: Int; let working: Int; let attention: Int }
 struct WProject: Decodable { let name: String; let sessions: Int }
@@ -63,7 +63,8 @@ func barTitle(_ w: Widget) -> String {
   for st in ["permission", "error", "waiting"] { let n = count(st); if n > 0 { parts.append("\(STATUS_ICON[st]!)\(n)") } }
   let done = count("completed")
   if done > 0 { parts.append("✅\(done)") }
-  if w.night.fail > 0 || !w.ci.isEmpty || w.stock.contains(where: { $0.alarm }) { parts.append("⚠︎") }
+  let ciFresh = w.ci.filter { $0.stale != true }
+  if w.night.fail > 0 || !ciFresh.isEmpty || w.stock.contains(where: { $0.alarm }) { parts.append("⚠︎") }
   if w.todoCount > 0 { parts.append("📥\(w.todoCount)") }
   return parts.isEmpty ? "🕹" : "🕹" + parts.joined(separator: "")
 }
@@ -97,7 +98,10 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
   if let n = w.night.nextName, let at = w.night.nextAt { night += " · další \(n) \(clock(at))" }
   out.append((night, "night", nil))
   if w.night.snapshotOld { out.append(("cloud: snímek je starý, aplikace Claude asi neběží", "warn", nil)) }
-  for c in w.ci { out.append(("CI ✗ \(c.project) · \(c.name ?? "workflow")", "ci", c.url)) }
+  for c in w.ci.sorted(by: { ($0.stale == true ? 1 : 0) < ($1.stale == true ? 1 : 0) }) {
+    let long = c.stale == true ? " · padá déle než týden" : ""
+    out.append(("CI ✗ \(c.project) · \(c.name ?? "workflow")\(long)", c.stale == true ? "muted" : "ci", c.url))
+  }
   if !w.stock.isEmpty {
     let s = w.stock.map { "\($0.project) \($0.pending)\($0.alarm ? "!" : "")" }.joined(separator: " · ")
     out.append(("📚 zásoba témat: \(s)", w.stock.contains { $0.alarm } ? "warn" : "muted", nil))

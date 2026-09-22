@@ -6,7 +6,7 @@ interface DigestData {
   sessions: Ev[]; jobsOk: Ev[]; jobsFail: Ev[]; ciFail: Ev[]; stock: Ev[];
   counts: { sessions: number; jobsOk: number; jobsFail: number; ciFail: number };
   waitingNow: { id: string; name: string; status: string; since: number; project: string; message?: string }[];
-  ciFailingNow: { project: string; name?: string; at?: number; url?: string }[];
+  ciFailingNow: { project: string; name?: string; at?: number; url?: string; stale?: boolean }[];
   stockNow?: { at: number; items: { project: string; pending: number; alarm: boolean }[] };
   snapshotAt?: number;
 }
@@ -44,7 +44,7 @@ export class DigestView {
   private render(d: DigestData) {
     const li = (e: Ev, cls = '') => `<li class="${cls}"><span class="dt">${dayClock(e.at)}</span><span><b>${esc(e.title)}</b>${e.project ? ` <span class="dmuted">· ${esc(e.project)}</span>` : ''}${e.detail ? `<div class="dmuted small">${esc(e.detail)}</div>` : ''}</span></li>`;
     const waiting = d.waitingNow.map(w => `<li class="${w.status}" data-id="${esc(w.id)}"><span class="dt">${ago(w.since)}</span><span><b>${esc(w.name)}</b> <span class="dmuted">· ${esc(w.project)} · ${STATUS[w.status] ?? w.status}</span>${w.message ? `<div class="dmuted small">${esc(w.message)}</div>` : ''}</span></li>`);
-    const ci = d.ciFailingNow.map(c => `<li class="error"><span class="dt">${c.at ? dayClock(c.at) : ''}</span><span><b>${esc(c.project)}</b> <span class="dmuted">· ${esc(c.name ?? 'workflow')} selhal</span>${c.url ? ` <a href="${esc(c.url)}" target="_blank" rel="noopener">otevřít</a>` : ''}</span></li>`);
+    const ci = d.ciFailingNow.map(c => `<li class="${c.stale ? 'dmuted' : 'error'}"><span class="dt">${c.at ? dayClock(c.at) : ''}</span><span><b>${esc(c.project)}</b> <span class="dmuted">· ${esc(c.name ?? 'workflow')} selhal${c.stale ? ' · padá déle než týden' : ''}</span>${c.url ? ` <a href="${esc(c.url)}" target="_blank" rel="noopener">otevřít</a>` : ''}</span></li>`);
     const stock = d.stockNow ? `<p class="${d.stockNow.items.some(i => i.alarm) ? 'alarm' : 'dmuted'}">Zásoba témat: ${d.stockNow.items.map(i => `${esc(i.project)} <b>${i.pending}</b>`).join(' · ')}</p>` : '';
     const snap = d.snapshotAt ? `<p class="dmuted small">Snímek cloudu ${dayClock(d.snapshotAt)}${Date.now() - d.snapshotAt > 2 * 3600_000 ? ' (starý, aplikace Claude asi neběžela)' : ''}</p>` : '';
     this.host.innerHTML = `

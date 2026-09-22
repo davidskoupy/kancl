@@ -264,3 +264,5 @@ body.digest #app { display: none; }
 .mpref { background: none; border: 1px solid var(--line); border-radius: 10px; padding: 0 5px; font-size: 10px; line-height: 16px; cursor: pointer; opacity: .45; }
 .mpref.on { opacity: 1; border-color: var(--permission); }
 .mpref:hover { opacity: 1; }
+
+.ci.stale { color: var(--muted); font-weight: 400; }
