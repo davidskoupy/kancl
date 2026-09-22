@@ -34,7 +34,7 @@ let todo: Todo[] = [];
 let lastTodoJson = '';
 function refreshTodo() {
   const live = new Set(store.list().map(s => s.id));
-  const next = buildTodo(desktop.all(), Date.now(), live, dismissed, cwd => { const id = store.projectResolver?.(cwd); return id ? scanner.projects.find(p => p.id === id)?.name : undefined; });
+  const next = buildTodo(desktop.all(), Date.now(), live, dismissed, cwd => { const id = store.projectResolver?.(cwd); return id ? scanner.projects.find(p => p.id === id)?.name : undefined; }, config.todoDays);
   const j = JSON.stringify(next);
   if (j === lastTodoJson) return;
   lastTodoJson = j; todo = next;

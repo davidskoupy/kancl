@@ -110,6 +110,7 @@ export interface NightShift {
   jobs: Job[];
   stock?: Stock;
   cloudSessions: CloudSession[];
+  cloudSessionsUnavailable?: boolean;  // naplánovaný běh cloudová sezení nevidí (není to chyba)
   snapshotAt?: number;     // kdy vznikl ~/.kancl/cloud.json
   snapshotError?: string;
   scannedAt: number;

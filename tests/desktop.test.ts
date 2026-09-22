@@ -43,7 +43,19 @@ test('buildTodo: nepřečtené, bez naplánovaných, bez běžících, s odškrt
     { ...base, desktopId: 'f', cliSessionId: 'cf', title: 'Odškrtnuté', lastActivityAt: now - 3 * h },
     { ...base, desktopId: 'g', cliSessionId: 'cg', title: 'Staré', lastActivityAt: now - 10 * 24 * h },
   ];
-  const out = buildTodo(list, now, new Set(['ce']), { f: now - h });
+  const out = buildTodo(list, now, new Set(['ce']), { f: now - h });   // výchozí okno 3 dny
   assert.deepEqual(out.map(t => t.title), ['Nikdy neotevřené', 'Nepřečtené']);
   assert.equal(out[1].project, 'deky');
+});
+
+test('buildTodo: okno se dá zkrátit i prodloužit', () => {
+  const now = 1_000_000_000_000;
+  const d = 24 * 3600_000;
+  const base = { isArchived: false, scheduled: false, starred: false } as const;
+  const list = [
+    { ...base, desktopId: 'a', title: 'Včerejší', lastActivityAt: now - 1 * d, cwd: '/c/x' },
+    { ...base, desktopId: 'b', title: 'Před pěti dny', lastActivityAt: now - 5 * d, cwd: '/c/x' },
+  ];
+  assert.deepEqual(buildTodo(list, now, new Set(), {}, undefined, 3).map(t => t.title), ['Včerejší']);
+  assert.deepEqual(buildTodo(list, now, new Set(), {}, undefined, 7).map(t => t.title), ['Včerejší', 'Před pěti dny']);
 });

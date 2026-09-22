@@ -351,7 +351,7 @@ export class Panel {
       <li class="csess ${c.status}" title="${esc(c.kind === 'cloud' ? 'cloudové sezení' : 'Remote Control')}">
         <i class="cdot"></i><span class="cname">${esc(c.name)}</span><span class="cst">${c.status === 'working' ? 'pracuje' : c.status === 'idle' ? 'čeká' : 'offline'}${c.kind === 'remote-control' ? ' · RC' : ''}</span>
       </li>`).join('');
-    const cloudDead = !n.cloudSessions.length && n.jobs.some(j => j.source === 'routine') && !!n.snapshotAt;
+    const cloudDead = !n.cloudSessions.length && !n.cloudSessionsUnavailable && n.jobs.some(j => j.source === 'routine') && !!n.snapshotAt;
     const cloudSection = cloudDead ? `<li class="nhead"><span>V cloudu</span><span class="muted snap old">bez dat — snímek nenačetl sezení</span></li>` : cloudRows ? `<li class="nhead"><span>V cloudu</span><span class="muted">${n.cloudSessions.length} ${plural(n.cloudSessions.length, 'sezení', 'sezení', 'sezení')}</span></li>${cloudRows}` : '';
     return `<li class="nhead"><span>Noční směna</span><span class="muted">${jobs.length} ${plural(jobs.length, 'úloha', 'úlohy', 'úloh')}${snap ? ' · ' + snap : ''}</span></li>${rows}${stockOrphan}${cloudSection}`;
   }

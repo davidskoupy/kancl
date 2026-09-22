@@ -13,9 +13,9 @@ export interface SnapshotRoutine {
   model?: string | null; endedReason?: string | null; url?: string | null;
 }
 export interface SnapshotSession { id: string; name: string; kind: string; status?: string; url?: string }
-export interface CloudSnapshot { version?: number; takenAt?: number | string; routines?: SnapshotRoutine[]; sessions?: SnapshotSession[]; error?: string }
+export interface CloudSnapshot { version?: number; takenAt?: number | string; routines?: SnapshotRoutine[]; sessions?: SnapshotSession[]; error?: string; sessionsUnavailable?: boolean }
 
-export interface ParsedCloud { jobs: Job[]; sessions: CloudSession[]; takenAt?: number; error?: string }
+export interface ParsedCloud { jobs: Job[]; sessions: CloudSession[]; takenAt?: number; error?: string; sessionsUnavailable?: boolean }
 
 const RESULT_WINDOW = 3 * 3600_000;
 const STALE = 7 * 24 * 3600_000;   // vypnutá routina se po týdnu přestane ukazovat
@@ -90,5 +90,5 @@ export function parseCloudSnapshot(text: string | undefined, now: number, offset
       url: s.url,
     }))
     .filter(s => s.kind === 'cloud' || s.status !== 'offline');
-  return { jobs, sessions, takenAt, error: snap.error };
+  return { jobs, sessions, takenAt, error: snap.error, sessionsUnavailable: snap.sessionsUnavailable === true };
 }

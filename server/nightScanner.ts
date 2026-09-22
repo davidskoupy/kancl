@@ -147,7 +147,7 @@ export class NightScanner {
     jobs.push(...cloud.jobs);
     const rank = (j: Job) => (j.state === 'bezi' ? 0 : j.state === 'chyba' ? 1 : j.state === 'vypnuto' ? 3 : 2);
     jobs.sort((a, b) => rank(a) - rank(b) || (b.lastRunAt ?? 0) - (a.lastRunAt ?? 0) || (a.nextRunAt ?? Infinity) - (b.nextRunAt ?? Infinity));
-    const night: NightShift = { jobs, stock, cloudSessions: cloud.sessions, snapshotAt: cloud.takenAt, snapshotError: cloud.error, scannedAt: now };
+    const night: NightShift = { jobs, stock, cloudSessions: cloud.sessions, cloudSessionsUnavailable: cloud.sessionsUnavailable, snapshotAt: cloud.takenAt, snapshotError: cloud.sessionsUnavailable ? undefined : cloud.error, scannedAt: now };
     const json = JSON.stringify({ ...night, scannedAt: 0 });
     if (json === this.lastJson) return;
     this.lastJson = json;

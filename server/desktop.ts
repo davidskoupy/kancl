@@ -87,13 +87,14 @@ export class DesktopIndex {
 import type { Todo } from '../shared/types.ts';
 import { folderInfo } from '../shared/folder.ts';
 
-const TODO_WINDOW = 7 * 24 * 3600_000;
+const DAY = 24 * 3600_000;
 
 /**
  * „K dokončení": neaktivní, nearchivované sezení, kde se něco stalo po posledním otevření (nebo nikdy otevřené),
  * do 7 dní zpět. Naplánované úlohy a právě běžící sezení (`liveCli`) se vynechají, odškrtnutá (`dismissed`) také.
  */
-export function buildTodo(sessions: DesktopSession[], now: number, liveCli: Set<string>, dismissed: Record<string, number>, projectName?: (cwd: string) => string | undefined): Todo[] {
+export function buildTodo(sessions: DesktopSession[], now: number, liveCli: Set<string>, dismissed: Record<string, number>, projectName?: (cwd: string) => string | undefined, windowDays = 3): Todo[] {
+  const TODO_WINDOW = windowDays * DAY;
   const out: Todo[] = [];
   for (const d of sessions) {
     if (d.isArchived || d.scheduled || !d.title || !d.lastActivityAt) continue;

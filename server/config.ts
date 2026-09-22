@@ -15,6 +15,7 @@ export interface Config {
   roots: string[];
   hidden: string[];
   gitIntervalSec: number;
+  todoDays: number;
   remoteIntervalMin: number;
   gitlabHosts: string[];
   night: { enabled: boolean; engines: EngineConfig[]; cloudSnapshot: string };
@@ -25,6 +26,7 @@ const DEFAULTS: Config = {
   roots: ['~/Code'],
   hidden: [],
   gitIntervalSec: 120,   // stav gitu se v panelu neukazuje, stačí pomalu
+  todoDays: 3,           // jak staré neviděné sezení ještě patří do „K dokončení"
   remoteIntervalMin: 5,
   gitlabHosts: ['gitlab.shean.dev'],
   groups: [
