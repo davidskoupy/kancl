@@ -1,4 +1,4 @@
-import type { Session, NightShift, SessionStatus, Todo, AppSession } from '../../../shared/types.ts';
+import type { Session, NightShift, SessionStatus, Todo, AppSession, TurnSummary } from '../../../shared/types.ts';
 
 /** Mini režim (?mini=1): pruh do rohu obrazovky — souhrn, fronta „chce mě", noční směna. */
 const LABEL: Record<SessionStatus, string> = { permission: 'dotaz', error: 'chyba', waiting: 'čeká', completed: 'hotovo', working: 'práce', idle: 'klid' };
@@ -13,6 +13,12 @@ function ago(ts: number): string {
 function clockOf(ts: number): string {
   const d = new Date(ts);
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+/** Shrnutí posledního tahu na druhý řádek (zkrácené, ať se lišta nenafukuje). */
+function miniSum(sum?: TurnSummary): string {
+  const text = sum?.action ?? sum?.detail;
+  if (!text) return '';
+  return `<small class="masum ${sum!.action ? 'ask' : ''}" title="${esc(text)}">${sum!.action ? '⚠ ' : ''}${esc(text)}</small>`;
 }
 function esc(s: string): string { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!)); }
 
@@ -79,7 +85,7 @@ export class Mini {
     const body = [...groups.entries()].map(([project, list]) => `
       <div class="mgroup"><span class="mgname">${esc(project)}</span><span class="mgn">${list.length}</span></div>
       ${list.map(a => `<span class="marow ${a.live ? 'live' : ''} ${a.todo ? 'todo' : ''}" data-aid="${esc(a.desktopId)}" title="${esc(a.folder ?? '')}${a.turns ? ` · ${a.turns} tahů` : ''}">
-        <i></i><span class="matt">${a.starred ? '★ ' : ''}${esc(a.title)}</span><span class="mat">${clockOf(a.lastActivityAt)}</span>
+        <i></i><span class="matt">${a.starred ? '★ ' : ''}${esc(a.title)}</span><span class="mat">${clockOf(a.lastActivityAt)}</span>${miniSum(a.summary)}
       </span>`).join('')}`).join('');
     return `<div class="mapp open">${head}${body}</div>`;
   }
@@ -110,7 +116,7 @@ export class Mini {
       </div>
       <ul class="mlist">${rows || '<li class="mempty">nikdo tě nepotřebuje</li>'}</ul>
       ${workingProjects.length ? `<div class="mwork">v práci: ${workingProjects.map(esc).join(' · ')}</div>` : ''}
-      ${this.todo.length ? `<div class="mtodo"><span class="mk">k dokončení ${this.todo.length}</span>${this.todo.slice(0, 3).map(t => `<span class="mt" data-tid="${esc(t.desktopId)}" title="${esc(t.folder ?? '')}"><span class="mtt">${t.starred ? '★ ' : ''}${esc(t.title)} <small>${esc(t.project)}</small></span>${t.folder ? `<small class="mtf">📁 ${esc(t.folder)}</small>` : ''}<button class="mtdone" data-tdone="${esc(t.desktopId)}" title="odškrtnout">✓</button></span>`).join('')}</div>` : ''}
+      ${this.todo.length ? `<div class="mtodo"><span class="mk">k dokončení ${this.todo.length}</span>${this.todo.slice(0, 3).map(t => `<span class="mt" data-tid="${esc(t.desktopId)}" title="${esc(t.folder ?? '')}"><span class="mtt">${t.starred ? '★ ' : ''}${esc(t.title)} <small>${esc(t.project)}</small></span>${miniSum(t.summary)}${t.folder ? `<small class="mtf">📁 ${esc(t.folder)}</small>` : ''}<button class="mtdone" data-tdone="${esc(t.desktopId)}" title="odškrtnout">✓</button></span>`).join('')}</div>` : ''}
       ${this.renderApp()}
       <div class="mfoot ${jobsErr ? 'err' : ''}">
         noční směna: ${jobsOk} ✓${jobsErr ? ` · <b>${jobsErr} ✗</b>` : ''}${next ? ` · další ${esc(next.name)} ${clock(next.nextRunAt!)}` : ''}${snapOld ? ' · <span class="old">cloud zastaralý</span>' : ''}

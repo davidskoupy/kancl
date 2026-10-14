@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAppSessions } from '../server/desktop.ts';
+import { buildAppSessions, parseSummary } from '../server/desktop.ts';
 
 const base = { isArchived: false, scheduled: false, starred: false } as const;
 const now = 1_000_000_000_000;
@@ -58,4 +58,34 @@ test('buildAppSessions: okno se dá nastavit, výchozí jsou 4 h', () => {
   assert.equal(buildAppSessions(list, now).length, 0, 'bez nastavení platí 4 h');
   const fresh = [{ ...base, desktopId: 'b', cliSessionId: 'cb', title: 'Před 3 h', lastActivityAt: now - 3 * h, cwd: '/c/x' }];
   assert.equal(buildAppSessions(fresh, now).length, 1);
+});
+
+test('parseSummary: z postTurnSummary vezme, co se udělalo a co se po mně chce', () => {
+  const done = parseSummary({ status_category: 'completed', status_detail: 'deleted 138 merged claude/ branches', needs_action: '' });
+  assert.deepEqual(done, { category: 'completed', detail: 'deleted 138 merged claude/ branches', action: undefined });
+
+  const blocked = parseSummary({ status_category: 'blocked', status_detail: 'password page built', needs_action: 'Add line KURZ_HESLO=…' });
+  assert.equal(blocked?.category, 'blocked');
+  assert.equal(blocked?.action, 'Add line KURZ_HESLO=…');
+
+  assert.equal(parseSummary(undefined), undefined, 'bez shrnutí nic');
+  assert.equal(parseSummary({ status_category: 'completed', status_detail: '   ', needs_action: '' }), undefined, 'prázdné shrnutí se zahodí');
+  assert.equal(parseSummary({ status_detail: 'něco' })?.category, 'other', 'neznámá kategorie → other');
+  assert.equal(parseSummary({ status_category: 'vymyšlená', status_detail: 'něco' })?.category, 'other');
+  assert.equal(parseSummary({ status_detail: 'x'.repeat(500) })?.detail?.length, 200, 'dlouhý text se zkrátí');
+
+  const same = parseSummary({ status_category: 'blocked', status_detail: 'Mám jich dát 5?', needs_action: 'Mám jich dát 5?' });
+  assert.deepEqual(same, { category: 'blocked', detail: undefined, action: 'Mám jich dát 5?' }, 'stejná věta v obojím se neopakuje');
+});
+
+test('buildAppSessions: sezení, které na mě čeká, je hned za živými', () => {
+  const ask = { category: 'blocked' as const, detail: 'hotovo z poloviny', action: 'dej mi heslo' };
+  const list = [
+    { ...base, desktopId: 'a', title: 'Živé', lastActivityAt: now - 10_000, cliSessionId: 'ca', cwd: '/c/deky' },
+    { ...base, desktopId: 'b', title: 'Novější, nic nechce', lastActivityAt: now - 60_000, cwd: '/c/deky' },
+    { ...base, desktopId: 'c', title: 'Starší, ale čeká na mě', lastActivityAt: now - 2 * h, cwd: '/c/deky', summary: ask },
+  ];
+  const out = buildAppSessions(list, now, { liveCli: new Set(['ca']) });
+  assert.deepEqual(out.map(a => a.desktopId), ['a', 'c', 'b']);
+  assert.equal(out[1].summary?.action, 'dej mi heslo', 'shrnutí se propíše do seznamu');
 });

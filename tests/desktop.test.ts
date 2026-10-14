@@ -7,7 +7,7 @@ import { parseDesktopSession, DesktopIndex } from '../server/desktop.ts';
 
 test('parseDesktopSession vytáhne název a id', () => {
   const out = parseDesktopSession(JSON.stringify({ sessionId: 'local_abc', cliSessionId: 'uuid-1', title: ' Fragmento šablona ', lastActivityAt: 5, isArchived: false, cwd: '/x' }));
-  assert.deepEqual(out, { cliSessionId: 'uuid-1', session: { desktopId: 'local_abc', cliSessionId: 'uuid-1', title: 'Fragmento šablona', lastActivityAt: 5, lastFocusedAt: undefined, isArchived: false, cwd: '/x', scheduled: false, starred: false, error: undefined, turns: undefined } });
+  assert.deepEqual(out, { cliSessionId: 'uuid-1', session: { desktopId: 'local_abc', cliSessionId: 'uuid-1', title: 'Fragmento šablona', lastActivityAt: 5, lastFocusedAt: undefined, isArchived: false, cwd: '/x', scheduled: false, starred: false, error: undefined, turns: undefined, summary: undefined } });
   assert.equal(parseDesktopSession('{nope'), undefined);
   assert.equal(parseDesktopSession(JSON.stringify({ sessionId: 'local_x' })), undefined);
 });

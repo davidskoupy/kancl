@@ -153,6 +153,11 @@ Naplánované úlohy tu nejsou, ty patří do noční směny. Seznam je v mini r
 pamatuje), v panelu pod příslušným projektem (`3× dnes`, projekt s dnešní prací nespadne mezi schované klidné),
 v menu baru a na `GET /api/app`.
 
+**Co sezení naposled udělalo** se bere ze shrnutí, které si aplikace Claude odkládá k sezení (`postTurnSummary`):
+šedý řádek pod názvem říká výsledek („deleted 138 merged claude/ branches; kept 1 with open PR"), žlutý `⚠` to,
+co se čeká po tobě („Add line KURZ_MAKLERI_HESLO=…"). Bez něj jsou názvy typu *Remote Control session (from a project)*
+k ničemu. Stejné shrnutí je i u „K dokončení" a v menu baru; sezení, které na tebe čeká, se řadí hned za živá.
+
 
 ## Zdraví projektu
 

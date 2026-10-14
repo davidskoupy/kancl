@@ -1,4 +1,4 @@
-import type { Session, SessionStatus, Project, Worktree, MergeRequest, NightShift, Job, Todo, AppSession } from '../../../shared/types.ts';
+import type { Session, SessionStatus, Project, Worktree, MergeRequest, NightShift, Job, Todo, AppSession, TurnSummary } from '../../../shared/types.ts';
 import { attentionQueue, inQueue, needsYou } from '../../../shared/attention.ts';
 
 export interface PanelEvents {
@@ -43,6 +43,15 @@ function clock(ts: number): string {
 
 function esc(s: string): string {
   return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+}
+
+/** Co sezení naposled udělalo (a jestli po tobě něco chce) — u mlhavých názvů je to jediná zpráva o obsahu. */
+function sumHtml(sum?: TurnSummary): string {
+  if (!sum) return '';
+  const parts: string[] = [];
+  if (sum.detail) parts.push(`<div class="sum" title="${esc(sum.detail)}">${esc(sum.detail)}</div>`);
+  if (sum.action) parts.push(`<div class="sum ask" title="${esc(sum.action)}">⚠ ${esc(sum.action)}</div>`);
+  return parts.join('');
 }
 
 /** "dnes 07:04", "včera 07:04", "8. 9. 07:04" */
@@ -258,6 +267,7 @@ export class Panel {
           <div class="bar"></div>
           <div>
             <div class="name"><span>${a.starred ? '★ ' : ''}${esc(a.title)}</span><span class="proj">${a.todo ? 'k dokončení' : 'dnes'}</span></div>
+            ${sumHtml(a.summary)}
             ${a.folder ? `<div class="folder">📁 ${esc(a.folder)}</div>` : ''}
           </div>
           <div class="time">${dayClock(a.lastActivityAt).replace('dnes ', '')}</div>
@@ -330,6 +340,7 @@ export class Panel {
         <div>
           <div class="name"><span>${t.starred ? '★ ' : ''}${esc(t.title)}</span><span class="proj">${esc(t.project)}</span></div>
           <div class="detail">${t.error ? `<span class="status error">chyba</span> ${esc(t.error)}` : `${t.lastFocusedAt ? 'nová aktivita' : 'neotevřeno'} · ${dayClock(t.lastActivityAt)}${t.turns ? ` · ${t.turns} ${plural(t.turns, 'tah', 'tahy', 'tahů')}` : ''}`}</div>
+          ${sumHtml(t.summary)}
           ${t.folder ? `<div class="folder">📁 ${esc(t.folder)}</div>` : ''}
         </div>
         <button class="tdone" data-tdone="${esc(t.desktopId)}" title="odškrtnout (v Kanclu, aplikace se nemění)">✓</button>

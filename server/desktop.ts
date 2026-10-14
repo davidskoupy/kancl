@@ -6,7 +6,21 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-export interface DesktopSession { desktopId: string; cliSessionId?: string; title?: string; lastActivityAt?: number; lastFocusedAt?: number; isArchived: boolean; cwd?: string; scheduled: boolean; starred: boolean; error?: string; turns?: number }
+export interface DesktopSession { desktopId: string; cliSessionId?: string; title?: string; lastActivityAt?: number; lastFocusedAt?: number; isArchived: boolean; cwd?: string; scheduled: boolean; starred: boolean; error?: string; turns?: number; summary?: TurnSummary }
+
+const CATEGORIES = new Set(['completed', 'blocked', 'review_ready']);
+
+/** `postTurnSummary` z aplikace: jednořádkový výsledek posledního tahu a případně to, co se po tobě chce. */
+export function parseSummary(raw: any): TurnSummary | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 200) : undefined);
+  const detail = text(raw.status_detail);
+  const action = text(raw.needs_action);
+  if (!detail && !action) return undefined;
+  const cat = typeof raw.status_category === 'string' && CATEGORIES.has(raw.status_category) ? raw.status_category : 'other';
+  // aplikace do obojího často dá tu samou větu (typicky otázka u blocked) — pak stačí jednou, jako „chce tě"
+  return { category: cat as TurnSummary['category'], detail: detail === action ? undefined : detail, action };
+}
 
 const SESSIONS_DIR = join(homedir(), 'Library', 'Application Support', 'Claude', 'claude-code-sessions');
 
@@ -29,6 +43,7 @@ export function parseDesktopSession(raw: string): { cliSessionId: string; sessio
       starred: d.isStarred === true,
       error: typeof d.error === 'string' ? d.error.slice(0, 160) : undefined,
       turns: typeof d.completedTurns === 'number' ? d.completedTurns : undefined,
+      summary: parseSummary(d.postTurnSummary),
     },
   };
 }
@@ -84,7 +99,7 @@ export class DesktopIndex {
   }
 }
 
-import type { AppSession, Todo } from '../shared/types.ts';
+import type { AppSession, Todo, TurnSummary } from '../shared/types.ts';
 import { folderInfo } from '../shared/folder.ts';
 
 const DAY = 24 * 3600_000;
@@ -108,10 +123,14 @@ export function buildTodo(sessions: DesktopSession[], now: number, liveCli: Set<
       desktopId: d.desktopId, cliSessionId: d.cliSessionId, title: d.title,
       ...(() => { if (!d.cwd) return { project: '—', folder: '—' }; const f = folderInfo(d.cwd, homedir()); return { project: projectName?.(d.cwd) ?? (f.scratch ? 'bez projektu' : (f.repo ?? '—')), folder: f.folder }; })(), cwd: d.cwd,
       lastActivityAt: d.lastActivityAt, lastFocusedAt: d.lastFocusedAt,
-      starred: d.starred, error: d.error, turns: d.turns,
+      starred: d.starred, error: d.error, turns: d.turns, summary: d.summary,
     });
   }
-  return out.sort((a, b) => Number(b.starred) - Number(a.starred) || b.lastActivityAt - a.lastActivityAt).slice(0, 40);
+  return out.sort((a, b) =>
+    Number(b.starred) - Number(a.starred)
+    || Number(!!b.summary?.action) - Number(!!a.summary?.action)
+    || b.lastActivityAt - a.lastActivityAt,
+  ).slice(0, 40);
 }
 
 /**
@@ -149,11 +168,16 @@ export function buildAppSessions(
       lastFocusedAt: d.lastFocusedAt,
       starred: d.starred,
       turns: d.turns,
+      summary: d.summary,
       live: !!(d.cliSessionId && opts.liveCli?.has(d.cliSessionId)),
       todo: !!opts.todoIds?.has(d.desktopId),
     });
   }
   return out
-    .sort((a, b) => Number(b.live) - Number(a.live) || b.lastActivityAt - a.lastActivityAt)
+    .sort((a, b) =>
+      Number(b.live) - Number(a.live)
+      || Number(!!b.summary?.action) - Number(!!a.summary?.action)
+      || b.lastActivityAt - a.lastActivityAt,
+    )
     .slice(0, opts.limit ?? 40);
 }

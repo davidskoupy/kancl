@@ -16,8 +16,8 @@ struct WCi: Decodable { let project: String; let name: String?; let url: String?
 struct WStock: Decodable { let project: String; let pending: Int; let alarm: Bool }
 struct WSessions: Decodable { let total: Int; let working: Int; let attention: Int }
 struct WProject: Decodable { let name: String; let sessions: Int }
-struct WTodo: Decodable { let id: String; let title: String; let project: String; let folder: String?; let at: Double; let starred: Bool; let error: String? }
-struct WApp: Decodable { let id: String; let title: String; let project: String; let folder: String?; let at: Double; let live: Bool; let todo: Bool; let starred: Bool }
+struct WTodo: Decodable { let id: String; let title: String; let project: String; let folder: String?; let at: Double; let starred: Bool; let error: String?; let detail: String?; let action: String? }
+struct WApp: Decodable { let id: String; let title: String; let project: String; let folder: String?; let at: Double; let live: Bool; let todo: Bool; let starred: Bool; let detail: String?; let action: String? }
 struct Widget: Decodable {
   let at: Double
   let sessions: WSessions
@@ -72,6 +72,14 @@ func barTitle(_ w: Widget) -> String {
   return parts.isEmpty ? "🕹" : "🕹" + parts.joined(separator: "")
 }
 
+/// Shrnutí posledního tahu jako odsazený řádek — u mlhavých názvů („Remote Control session") je to jediné, z čeho se pozná obsah.
+func sumLines(_ detail: String?, _ action: String?) -> [(String, String, String?)] {
+  var out: [(String, String, String?)] = []
+  if let d = detail, !d.isEmpty { out.append(("      \(d.prefix(70))", "muted", nil)) }
+  if let a = action, !a.isEmpty { out.append(("      ⚠ \(a.prefix(70))", "warn", nil)) }
+  return out
+}
+
 /// Řádky menu jako text (stejné pro --once i pro NSMenu).
 func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
   var out: [(String, String, String?)] = []
@@ -91,6 +99,7 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
     for t in w.todo {
       let mark = t.error != nil ? "‼️" : t.starred ? "★" : "📥"
       out.append(("\(mark) \(t.title) [\(t.project)] · \(ago(t.at))", "todo", t.id))
+      out.append(contentsOf: sumLines(t.detail, t.action))
       if let f = t.folder, !f.isEmpty { out.append(("      📁 \(f)", "muted", nil)) }
     }
   }
@@ -105,6 +114,7 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
       for a in list.prefix(5) {
         let mark = a.live ? "▶" : a.todo ? "📥" : a.starred ? "★" : "·"
         out.append(("\(mark) \(a.title) · \(clock(a.at))", "app", a.id))
+        out.append(contentsOf: sumLines(a.detail, a.action))
       }
     }
   }

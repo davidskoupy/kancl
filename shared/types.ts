@@ -116,6 +116,17 @@ export interface NightShift {
   scannedAt: number;
 }
 
+/**
+ * Shrnutí posledního tahu, jak si ho aplikace Claude odkládá k sezení (`postTurnSummary`):
+ * co se udělalo a jestli to čeká na tebe. U sezení s mlhavým názvem (třeba „Remote Control session")
+ * je to jediné, z čeho se pozná, o co šlo.
+ */
+export interface TurnSummary {
+  category: 'completed' | 'blocked' | 'review_ready' | 'other';
+  detail?: string;    // „deleted 138 merged claude/ branches; kept 1 with open PR"
+  action?: string;    // co se po tobě chce (jen u blocked / review_ready)
+}
+
 /** Sezení v desktopové aplikaci, ve kterém se něco stalo po posledním otevření (= k dokončení). */
 export interface Todo {
   desktopId: string;
@@ -129,6 +140,7 @@ export interface Todo {
   starred: boolean;
   error?: string;
   turns?: number;
+  summary?: TurnSummary;   // co sezení naposledy udělalo
 }
 
 /**
@@ -147,6 +159,7 @@ export interface AppSession {
   lastFocusedAt?: number;
   starred: boolean;
   turns?: number;
+  summary?: TurnSummary;   // co sezení naposledy udělalo
   live: boolean;           // zároveň o něm ví hook (běží)
   todo: boolean;           // zároveň je v „K dokončení"
 }
