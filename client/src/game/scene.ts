@@ -91,15 +91,17 @@ export class Scene {
     this.update(dt);
   }
 
+  /** Celá čísla, a navíc poloviční krok — do úzkého pruhu vedle nástěnky se kancelář jinak nevejde. */
   setScale(s: number) {
-    this.scale = Math.max(1, Math.min(6, Math.round(s)));
+    this.scale = Math.max(0.5, Math.min(6, s < 1 ? 0.5 : Math.round(s)));
     this.world.scale.set(this.scale);
     this.app.renderer.resize(W * this.scale, H * this.scale);
     this.app.stage.hitArea = this.app.screen;
   }
 
   fitToHost(availW: number, availH: number) {
-    this.setScale(Math.max(1, Math.floor(Math.min(availW / W, availH / H))));
+    const f = Math.min(availW / W, availH / H);
+    this.setScale(f < 1 ? 0.5 : Math.floor(f));
   }
 
   private buildGround() {

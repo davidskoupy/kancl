@@ -95,6 +95,8 @@ export class Panel {
   private query = '';
   private pinned = new Set<string>(JSON.parse(localStorage.getItem('kancl.pinned') || '[]'));
   private toastTimer?: number;
+  private cols = 1;
+  private boardResize?: ResizeObserver;
 
   constructor(private events: PanelEvents) {
     document.getElementById('demo-btn')!.addEventListener('click', () => this.events.onDemo());
@@ -116,6 +118,16 @@ export class Panel {
     search.addEventListener('keydown', e => { if (e.key === 'Escape') { search.value = ''; this.query = ''; this.render(); search.blur(); } e.stopPropagation(); });
     window.addEventListener('keydown', e => { if (e.key === '/' && document.activeElement !== search) { e.preventDefault(); search.focus(); } });
     window.setInterval(() => this.renderTimes(), 1000);
+    // nástěnka se přeskládá, kdykoli se změní její šířka (okno, schovaná kancelář)
+    let resizeTimer = 0;
+    const reflow = () => {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => { if (this.columnCount() !== this.cols) this.render(); }, 60);
+    };
+    // reference na observer drží jeho životnost, bez ní ho prohlížeč může uklidit
+    this.boardResize = new ResizeObserver(reflow);
+    this.boardResize.observe(this.list);
+    window.addEventListener('resize', reflow);
   }
 
   /** Wire the notification / sound toggles. */
@@ -169,6 +181,12 @@ export class Panel {
     this.toast.hidden = false;
     window.clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => (this.toast.hidden = true), 2500);
+  }
+
+  /** Kolik sloupců se na nástěnku vejde (sekce se pak rozdělí mezi ně). */
+  private columnCount(): number {
+    const w = this.list.clientWidth || window.innerWidth;
+    return w >= 1020 ? 3 : w >= 680 ? 2 : 1;
   }
 
   // ---- data ---------------------------------------------------------------
@@ -225,7 +243,7 @@ export class Panel {
 
     let n = 0;                          // číslování sezení
     let klidShown = 0, klidHidden = 0;
-    const html: string[] = [this.renderApp()];
+    const html: string[] = [];
     let lastGroup: string | null | undefined = undefined;
     const showGroups = this.projects.some(p => p.group);
     for (const g of groups) {
@@ -277,9 +295,19 @@ export class Panel {
     }
     if (klidHidden) html.push(`<li class="more" data-more="1">+ ${klidHidden} ${plural(klidHidden, 'další', 'další', 'dalších')}</li>`);
     else if (this.showAllKlid && klidShown > KLID_VISIBLE) html.push(`<li class="more" data-more="0">sbalit</li>`);
-    html.push(this.renderTodo());
-    html.push(this.renderNight());
-    this.list.innerHTML = html.join('');
+    // nástěnka: co mě čeká / co se hýbe / projekty — kolik sloupců se vejde, tolik jich je
+    const ceka = this.renderAppCeka();
+    const parts = { ceka: ceka + this.renderTodo(), bezi: this.renderAppKlid(), noc: this.renderNight(), proj: html.join('') };
+    const ncols = this.cols = this.columnCount();
+    const cols: string[] = ncols >= 3
+      ? [parts.ceka, parts.bezi + parts.noc, parts.proj]
+      : ncols === 2
+        ? [parts.ceka, parts.bezi + parts.proj + parts.noc]
+        : [parts.ceka + parts.bezi + parts.proj + parts.noc];
+    this.list.style.setProperty('--cols', String(ncols));
+    this.list.innerHTML = cols
+      .map((c, i) => `<ul class="stack${i === 0 && ceka ? ' ask' : ''}">${c}</ul>`)
+      .join('');
     this.list.querySelectorAll<HTMLElement>('[data-aid]').forEach(li => li.addEventListener('click', e => { e.stopPropagation(); this.events.onAppFocus(li.dataset.aid!); }));
     this.list.querySelectorAll<HTMLButtonElement>('[data-acopy]').forEach(b => b.addEventListener('click', e => {
       e.stopPropagation();
@@ -328,17 +356,18 @@ export class Panel {
    * „V projektech" po stavech, ne po projektech: co běží, co se zastavilo a chce mě,
    * a co jen doběhlo a leží. Projekt je u řádku jen popiskem.
    */
-  private renderApp(): string {
+  private appItems(): AppSession[] {
     const q = this.query;
     let items = this.app;
     if (q) items = items.filter(a => `${a.title} ${a.project} ${a.summary?.detail ?? ''} ${a.summary?.action ?? ''}`.toLowerCase().includes(q));
     if (this.filter === 'attention') items = items.filter(a => a.state === 'ceka');
-    if (!items.length) return '';
+    return items;
+  }
 
-    const ceka = items.filter(a => a.state === 'ceka');
-    const bezi = items.filter(a => a.state === 'bezi');
-    const stoji = items.filter(a => a.state === 'stoji');
-
+  /** První sloupec: co se zastavilo a chce mě. Karty, protože na ně klikám. */
+  private renderAppCeka(): string {
+    const ceka = this.appItems().filter(a => a.state === 'ceka');
+    if (!ceka.length) return '';
     const card = (a: AppSession) => {
       const ask = a.summary?.action ?? a.summary?.detail ?? a.title;
       const did = a.summary?.action && a.summary.detail ? a.summary.detail : '';
@@ -357,7 +386,16 @@ export class Panel {
           </div>
         </li>`;
     };
+    return `<li class="nhead ask apphead"><span>Čeká na tebe</span><span class="muted">${ceka.length} ${plural(ceka.length, 'sezení', 'sezení', 'sezení')} v projektech</span></li>${ceka.map(card).join('')}`;
+  }
 
+  /** Druhý sloupec: co běží a co jen doběhlo a leží. Řádky, jen pro přehled. */
+  private renderAppKlid(): string {
+    const items = this.appItems();
+    const bezi = items.filter(a => a.state === 'bezi');
+    const stoji = items.filter(a => a.state === 'stoji');
+    if (!bezi.length && !stoji.length) return '';
+    const q = this.query;
     const line = (a: AppSession) => {
       const text = a.summary?.detail ?? a.summary?.action ?? a.title;
       const meta = [a.project, a.summary ? a.title : '', a.todo ? 'k dokončení' : ''].filter(Boolean).join(' · ');
@@ -372,20 +410,18 @@ export class Panel {
         </li>`;
     };
 
-    const LIMIT = 5;
+    const LIMIT = 8;
     const klidne = [...bezi, ...stoji];
     const shown = this.showAllApp || q ? klidne : klidne.slice(0, LIMIT);
     const more = klidne.length > LIMIT && !q
       ? `<li class="more" data-amore="1">${this.showAllApp ? 'sbalit' : `+ ${klidne.length - LIMIT} ${plural(klidne.length - LIMIT, 'další', 'další', 'dalších')}`}</li>`
       : '';
-    const head = (label: string, n: number, cls = '') => `<li class="nhead ${cls}"><span>${label}</span><span class="muted">${n}</span></li>`;
+    const head = (label: string, n: number, hint: string) => `<li class="nhead apphead"><span>${label}</span><span class="muted">${n}${hint ? ' · ' + hint : ''}</span></li>`;
 
     return [
-      `<li class="nhead apphead"><span>V projektech</span><span class="muted">${items.length} ${plural(items.length, 'sezení', 'sezení', 'sezení')} za pár hodin</span></li>`,
-      ceka.length ? head('Čeká na tebe', ceka.length, 'ask') + ceka.map(card).join('') : '',
-      shown.filter(a => a.state === 'bezi').length ? head('Teď běží', bezi.length) : '',
+      shown.some(a => a.state === 'bezi') ? head('Teď běží', bezi.length, 'v projektech') : '',
       shown.filter(a => a.state === 'bezi').map(line).join(''),
-      shown.filter(a => a.state === 'stoji').length ? head('Stojí', stoji.length) : '',
+      shown.some(a => a.state === 'stoji') ? head('Stojí', stoji.length, 'doběhlo a leží') : '',
       shown.filter(a => a.state === 'stoji').map(line).join(''),
       more,
     ].join('');
@@ -526,15 +562,21 @@ export class Panel {
     const jobErr = this.night.jobs.filter(j => j.state === 'chyba').length;
     if (todayOk) parts.push(`<span class="completed"><b>${todayOk}</b> ${plural(todayOk, 'úloha', 'úlohy', 'úloh')} ✓</span>`);
     if (jobErr) parts.push(`<span class="error"><b>${jobErr}</b> ${plural(jobErr, 'úloha', 'úlohy', 'úloh')} ✗</span>`);
-    this.summary.innerHTML = parts.join('<span style="opacity:.4">·</span>');
+    this.summary.innerHTML = parts.join('');
+  }
+
+  /** Pravý pruh se objeví jen když je co ukázat (viz body.has-details). */
+  private showDetails(open: boolean) {
+    this.details.hidden = !open;
+    document.body.classList.toggle('has-details', open);
   }
 
   private renderDetails() {
-    if (!this.sel) { this.details.hidden = true; return; }
+    if (!this.sel) { this.showDetails(false); return; }
     if (this.sel.kind === 'job') {
       const j = this.night.jobs.find(x => x.id === this.sel!.id);
-      if (!j) { this.details.hidden = true; return; }
-      this.details.hidden = false;
+      if (!j) { this.showDetails(false); return; }
+      this.showDetails(true);
       this.details.innerHTML = this.jobDetails(j);
       this.details.querySelector('[data-act="open"]')?.addEventListener('click', () => this.events.onOpenFile(j.filePath!));
       this.details.querySelector('[data-act="proj"]')?.addEventListener('click', () => { this.sel = { kind: 'project', id: j.projectId! }; this.render(); });
@@ -542,8 +584,8 @@ export class Panel {
     }
     if (this.sel.kind === 'project') {
       const p = this.projects.find(x => x.id === this.sel!.id);
-      if (!p) { this.details.hidden = true; return; }
-      this.details.hidden = false;
+      if (!p) { this.showDetails(false); return; }
+      this.showDetails(true);
       this.details.innerHTML = this.projectDetails(p);
       this.details.querySelectorAll<HTMLElement>('[data-sid]').forEach(el => el.addEventListener('click', () => this.events.onSelect(el.dataset.sid!)));
       this.details.querySelectorAll<HTMLElement>('[data-jid]').forEach(el => el.addEventListener('click', () => this.selectJob(el.dataset.jid!)));
@@ -555,8 +597,8 @@ export class Panel {
       return;
     }
     const s = this.sessions.get(this.sel.id);
-    if (!s) { this.details.hidden = true; return; }
-    this.details.hidden = false;
+    if (!s) { this.showDetails(false); return; }
+    this.showDetails(true);
     this.details.innerHTML = this.sessionDetails(s);
     this.details.querySelector('[data-act="focus"]')!.addEventListener('click', () => this.events.onFocus(s.id));
     this.details.querySelector('[data-act="dismiss"]')!.addEventListener('click', () => this.events.onDismiss(s.id));

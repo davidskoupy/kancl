@@ -24,7 +24,12 @@ Kancl to ukáže v jednom okně prohlížeče jako 32×32 pixel‑artovou kancel
 - **Subagenti** jsou malé postavičky vedle rodiče.
 - Když sezení **potřebuje tebe**, postavička přijde do tvé kanceláře. Klik na ni a **Enter** vytáhne dopředu její terminál.
 
-Levý panel je strom projektů: větev, počet změn, otevřené PR (GitHub) a MR (GitLab), pod tím sezení.
+Okno je **nástěnka**: nahoře lišta (jak to stojí, filtry, hledání), pod ní sloupce podle toho, co po tobě práce chce —
+**Čeká na tebe** a **K dokončení** vlevo, **Teď běží / Stojí** a **Noční směna** uprostřed, **projekty** vpravo.
+Kolik sloupců se vejde, tolik jich je; na úzkém okně se poskládají pod sebe.
+Vpravo je pruh s kanceláří a detailem vybraného sezení — tlačítko **▣** v liště ji schová a nástěnka si vezme celé okno.
+
+Strom projektů ukazuje větev, počet změn, otevřené PR (GitHub) a MR (GitLab), pod tím sezení.
 Klik na projekt otevře detail s worktree, commity a odkazy na PR/MR.
 
 Žádný cloud, žádné účty, žádná telemetrie. Server poslouchá jen na `127.0.0.1`.

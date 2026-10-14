@@ -16,16 +16,19 @@
     <div id="mini" class="mini-root" hidden></div>
     <div id="digest" class="digest-root" hidden></div>
     <div id="app">
-      <aside id="panel">
-        <header class="panel-head">
-          <div class="logo">
-            <span class="logo-pix"></span>
-            <h1>Kancl</h1>
-          </div>
+      <header id="top">
+        <div class="brand">
+          <span class="logo-pix"></span>
+          <h1>Kancl</h1>
           <div class="conn" id="conn" title="Spojení se serverem"><span class="dot"></span><span class="conn-text">připojuji</span></div>
-        </header>
+        </div>
+        <div id="summary" class="summary"></div>
         <div class="filters" id="filters"></div>
-        <ul id="tree" class="tree"></ul>
+        <button id="stage-btn" class="chip pref" title="Zobrazit / skrýt kancelář">▣</button>
+      </header>
+
+      <div id="board-wrap">
+        <div id="tree" class="board"></div>
         <div id="empty" class="empty" hidden>
           <p><b>Zatím žádné sezení.</b></p>
           <p>Jednou nainstaluj hooky:</p>
@@ -33,6 +36,18 @@
           <p>a pak spusť <code>claude</code> v libovolném terminálu. Každé sezení se tu objeví jako kolega.</p>
           <button id="demo-btn" class="btn">▶ Pustit ukázkovou partu</button>
         </div>
+      </div>
+
+      <aside id="rail">
+        <main id="stage">
+          <div id="canvas-host"></div>
+          <div id="toolbar" class="toolbar">
+            <button id="zoom-out" class="btn sm" title="Oddálit">−</button>
+            <span id="zoom-label">×2</span>
+            <button id="zoom-in" class="btn sm" title="Přiblížit">+</button>
+            <button id="zoom-fit" class="btn sm" title="Na okno">okno</button>
+          </div>
+        </main>
         <section id="details" class="details" hidden></section>
         <footer class="panel-foot" id="legend">
           <span><i class="sw working"></i>Práce</span>
@@ -42,18 +57,8 @@
           <span><i class="sw error"></i>Chyba</span>
         </footer>
       </aside>
-      <main id="stage">
-        <div id="canvas-host"></div>
-        <div id="summary" class="summary"></div>
-        <div id="toolbar" class="toolbar">
-          <button id="zoom-out" class="btn sm" title="Oddálit">−</button>
-          <span id="zoom-label">×2</span>
-          <button id="zoom-in" class="btn sm" title="Přiblížit">+</button>
-          <button id="zoom-fit" class="btn sm" title="Na okno">okno</button>
-        </div>
-        <div id="toast" class="toast" hidden></div>
-      </main>
     </div>
+    <div id="toast" class="toast" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

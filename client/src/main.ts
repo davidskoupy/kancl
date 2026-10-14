@@ -107,16 +107,32 @@ async function boot() {
   let manualScale: number | null = Number(localStorage.getItem('kancl.zoom')) || null;
   const fit = () => {
     const r = stage.getBoundingClientRect();
-    if (manualScale) scene.setScale(manualScale);
-    else scene.fitToHost(r.width - 24, r.height - 70);
+    const avail = { w: r.width - 24, h: r.height - 70 };
+    // uložené přiblížení neplatí, když se do pruhu nevejde — jinak kancelář přetéká
+    if (manualScale && 480 * manualScale <= avail.w) scene.setScale(manualScale);
+    else scene.fitToHost(avail.w, avail.h);
     zoomLabel.textContent = `×${scene.scale}`;
     localStorage.setItem('kancl.zoom', manualScale ? String(manualScale) : '');
   };
   document.getElementById('zoom-in')!.addEventListener('click', () => { manualScale = scene.scale + 1; fit(); });
-  document.getElementById('zoom-out')!.addEventListener('click', () => { manualScale = Math.max(1, scene.scale - 1); fit(); });
+  document.getElementById('zoom-out')!.addEventListener('click', () => { manualScale = scene.scale > 1 ? scene.scale - 1 : 0.5; fit(); });
   document.getElementById('zoom-fit')!.addEventListener('click', () => { manualScale = null; fit(); });
   window.addEventListener('resize', fit);
   fit();
+
+  // kancelář se dá schovat; nástěnka si pak vezme celé okno
+  const stageBtn = document.getElementById('stage-btn')!;
+  const applyStage = () => {
+    const off = localStorage.getItem('kancl.stage') === 'off';
+    document.body.classList.toggle('no-stage', off);
+    stageBtn.classList.toggle('on', !off);
+    if (!off) requestAnimationFrame(fit);
+  };
+  stageBtn.addEventListener('click', () => {
+    localStorage.setItem('kancl.stage', localStorage.getItem('kancl.stage') === 'off' ? 'on' : 'off');
+    applyStage();
+  });
+  applyStage();
 
   // keyboard: 1-9 focus the n-th session in the list, Esc deselects
   window.addEventListener('keydown', e => {
