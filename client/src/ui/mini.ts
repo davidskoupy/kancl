@@ -76,14 +76,6 @@ export class Mini {
     const bezi = this.app.filter(a => a.state === 'bezi');
     const stoji = this.app.filter(a => a.state === 'stoji');
     const head = `<button class="mappk" data-apptoggle="1" title="sezení z aplikace Claude za posledních pár hodin (naplánované úlohy jsou v noční směně)">v projektech <b>${this.app.length}</b> ${this.appOpen ? '▾' : '▸'}</button>`;
-    if (!this.appOpen) {
-      const sum = [
-        ceka.length ? `<b class="mask">čeká ${ceka.length}</b>` : '',
-        bezi.length ? `běží ${bezi.length}` : '',
-        stoji.length ? `stojí ${stoji.length}` : '',
-      ].filter(Boolean).join(' · ');
-      return `<div class="mapp">${head}<span class="mappsum">${sum}</span></div>`;
-    }
     const group = (label: string, list: AppSession[], cls: string) => list.length ? `
       <div class="mgroup ${cls}"><span class="mgname">${label}</span><span class="mgn">${list.length}</span></div>
       ${list.map(a => {
@@ -93,6 +85,15 @@ export class Mini {
           <small class="masum">${esc(a.project)}${a.summary ? ` · ${esc(a.title)}` : ''}</small>
         </span>`;
       }).join('')}` : '';
+    // co čeká na mě je vidět vždycky; běží/stojí se schová pod šipku, ať pruh nenaroste
+    if (!this.appOpen) {
+      const sum = [
+        bezi.length ? `běží ${bezi.length}` : '',
+        stoji.length ? `stojí ${stoji.length}` : '',
+      ].filter(Boolean).join(' · ');
+      if (!ceka.length) return `<div class="mapp">${head}<span class="mappsum">${sum}</span></div>`;
+      return `<div class="mapp open"><div class="mappline">${head}<span class="mappsum">${sum}</span></div>${group('čeká na tebe', ceka, 'ceka')}</div>`;
+    }
     const body = group('čeká na tebe', ceka, 'ceka') + group('teď běží', bezi, 'bezi') + group('stojí', stoji, 'stoji');
     return `<div class="mapp open">${head}${body}</div>`;
   }

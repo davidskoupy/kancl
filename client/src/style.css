@@ -273,14 +273,13 @@ body.digest #app { display: none; }
 .mappk { background: none; border: 0; padding: 0; cursor: pointer; color: var(--muted); font: inherit; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; text-align: left; }
 .mappk b { color: var(--text); font-weight: 600; }
 .mappk:hover { color: var(--accent); }
+.mappline { display: flex; align-items: baseline; gap: 6px; }
 .mappsum { color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mgroup { display: flex; gap: 5px; align-items: baseline; color: var(--muted); font-size: 10px; padding-top: 3px; }
 .mgname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mgn { opacity: .6; }
 .marow { display: grid; grid-template-columns: 5px 1fr auto; align-items: baseline; gap: 2px 5px; cursor: pointer; padding: 1px 0 2px 6px; }
 .marow i { width: 5px; height: 5px; border-radius: 50%; background: var(--line); flex: 0 0 auto; }
-.marow.live i { background: var(--working); }
-.marow.todo i { background: var(--completed); }
 .marow .matt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
 .marow .mat { color: var(--muted); font-size: 10px; flex: 0 0 auto; }
 .marow:hover .matt { color: var(--accent); }
