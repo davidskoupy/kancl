@@ -269,7 +269,7 @@ const server = http.createServer(async (req, res) => {
         stock: night.night.stock?.items ?? [],
         todo: todo.slice(0, 8).map(t => ({ id: t.desktopId, title: t.title, project: t.project, folder: t.folder ?? null, at: t.lastActivityAt, starred: t.starred, error: t.error ?? null, detail: t.summary?.detail ?? null, action: t.summary?.action ?? null })),
         todoCount: todo.length,
-        app: app.slice(0, 12).map(a => ({ id: a.desktopId, title: a.title, project: a.project, folder: a.folder ?? null, at: a.lastActivityAt, live: a.live, todo: a.todo, starred: a.starred, detail: a.summary?.detail ?? null, action: a.summary?.action ?? null })),
+        app: app.slice(0, 12).map(a => ({ id: a.desktopId, title: a.title, project: a.project, folder: a.folder ?? null, at: a.lastActivityAt, live: a.live, todo: a.todo, starred: a.starred, state: a.state, detail: a.summary?.detail ?? null, action: a.summary?.action ?? null })),
         appCount: app.length,
       };
       return json(res, 200, body);

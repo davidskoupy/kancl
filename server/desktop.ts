@@ -99,7 +99,7 @@ export class DesktopIndex {
   }
 }
 
-import type { AppSession, Todo, TurnSummary } from '../shared/types.ts';
+import type { AppSession, AppState, Todo, TurnSummary } from '../shared/types.ts';
 import { folderInfo } from '../shared/folder.ts';
 
 const DAY = 24 * 3600_000;
@@ -156,6 +156,9 @@ export function buildAppSessions(
     if (d.isArchived || d.scheduled || !d.title || !d.lastActivityAt) continue;
     if (now - d.lastActivityAt > window) continue;
     const f = d.cwd ? folderInfo(d.cwd, homedir()) : undefined;
+    const live = !!(d.cliSessionId && opts.liveCli?.has(d.cliSessionId));
+    // „čeká" = samo od sebe se nehne: buď si řeklo o odpověď, nebo chce, abych se podíval
+    const waits = !!d.summary?.action || d.summary?.category === 'blocked' || d.summary?.category === 'review_ready';
     out.push({
       desktopId: d.desktopId,
       cliSessionId: d.cliSessionId,
@@ -169,15 +172,13 @@ export function buildAppSessions(
       starred: d.starred,
       turns: d.turns,
       summary: d.summary,
-      live: !!(d.cliSessionId && opts.liveCli?.has(d.cliSessionId)),
+      live,
       todo: !!opts.todoIds?.has(d.desktopId),
+      state: live ? 'bezi' : waits ? 'ceka' : 'stoji',
     });
   }
+  const rank: Record<AppState, number> = { bezi: 0, ceka: 1, stoji: 2 };
   return out
-    .sort((a, b) =>
-      Number(b.live) - Number(a.live)
-      || Number(!!b.summary?.action) - Number(!!a.summary?.action)
-      || b.lastActivityAt - a.lastActivityAt,
-    )
+    .sort((a, b) => rank[a.state] - rank[b.state] || b.lastActivityAt - a.lastActivityAt)
     .slice(0, opts.limit ?? 40);
 }

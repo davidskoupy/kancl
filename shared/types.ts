@@ -147,6 +147,12 @@ export interface Todo {
  * Sezení v desktopové aplikaci Claude, které v projektu nedávno něco dělalo — i když právě neběží.
  * Doplňuje živá sezení z hooků: po restartu serveru nebo u sezení, co dnes dojela, Kancl o nich jinak neví.
  */
+/**
+ * Ve kterém ze tří stavů sezení je: `bezi` = zrovna pracuje, `ceka` = zastavilo se
+ * a něco po mně chce, `stoji` = doběhlo a leží. Panel i lišta se tím řadí.
+ */
+export type AppState = 'bezi' | 'ceka' | 'stoji';
+
 export interface AppSession {
   desktopId: string;
   cliSessionId?: string;
@@ -162,6 +168,7 @@ export interface AppSession {
   summary?: TurnSummary;   // co sezení naposledy udělalo
   live: boolean;           // zároveň o něm ví hook (běží)
   todo: boolean;           // zároveň je v „K dokončení"
+  state: AppState;         // běží / čeká na mě / stojí
 }
 
 export interface SessionEvent {

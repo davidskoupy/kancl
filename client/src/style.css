@@ -286,21 +286,42 @@ body.digest #app { display: none; }
 .marow:hover .matt { color: var(--accent); }
 .masum { grid-column: 2 / 4; color: var(--muted); font-size: 10px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .masum.ask { color: var(--permission); }
+.mask { color: var(--permission); font-weight: 600; }
+.mgroup.ceka .mgname { color: var(--permission); }
+.marow.ceka .matt { color: #f7d575; }
+.marow.bezi i { background: var(--working); }
+.marow.ceka i { background: var(--permission); }
+.marow.stoji i { background: var(--idle); }
 .mt .masum { display: block; }
 
-/* panel: sezení z aplikace pod projektem (hook o nich neví, jen se do nich dá prokliknout) */
-.appses { display: grid; grid-template-columns: 3px 1fr auto; gap: 8px; align-items: start; padding: 4px 8px 4px 0; cursor: pointer; opacity: .8; }
-.appses:hover { opacity: 1; background: var(--panel-2); }
-.appses .bar { background: var(--line); border-radius: 2px; align-self: stretch; }
-.appses.todo .bar { background: var(--completed); }
-.appses > div { min-width: 0; }
-.appses .name { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
-.appses .name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.appses .proj { color: var(--muted); font-size: 10px; flex: 0 0 auto; }
-.appses .folder { color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.appses .time { color: var(--muted); font-size: 10px; text-align: right; white-space: nowrap; align-self: center; }
 .pmapp { color: var(--muted); }
 
 /* co sezení naposled udělalo (postTurnSummary z aplikace) */
 .sum { color: var(--muted); font-size: 11px; line-height: 1.35; margin-top: 1px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sum.ask { color: var(--permission); }
+
+/* „V projektech" po stavech: čeká na tebe (karty) / běží / stojí (řádky) */
+.apphead { margin-top: 10px; border-top: 0; }
+.nhead.ask { color: var(--permission); border-top: 0; margin-top: 10px; }
+.acard { display: block; margin: 0 8px 8px; padding: 9px 10px 10px; background: var(--panel-2); border: 1px solid #443c1b; border-radius: 7px; cursor: pointer; }
+.acard:hover { background: #262b3a; }
+.acard .ahead { display: flex; gap: 6px; align-items: baseline; }
+.acard .aproj { font-size: 11px; font-weight: 600; color: var(--text); white-space: nowrap; }
+.acard .atitle { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acard .time { font-size: 11px; color: var(--muted); margin-left: auto; white-space: nowrap; }
+.acard .aask { color: #f7d575; font-size: 13px; line-height: 1.4; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.acard .adid { color: var(--muted); font-size: 11px; line-height: 1.4; margin-top: 5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.acard .aacts { display: flex; gap: 6px; margin-top: 9px; }
+.acard .aacts button { font: inherit; font-size: 11px; border-radius: 4px; padding: 4px 9px; cursor: pointer; }
+.acard .aopen { background: #2f3547; border: 0; color: var(--text); }
+.acard .acopy { background: none; border: 1px solid #2f3547; color: var(--muted); }
+.acard .acopy:hover { color: var(--text); }
+.aline { display: grid; grid-template-columns: 8px 1fr auto; gap: 8px; align-items: start; padding: 5px 8px; border-radius: 8px; cursor: pointer; }
+.aline:hover { background: var(--panel-2); }
+.aline > div { min-width: 0; }
+.aline i { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); margin-top: 4px; }
+.aline.bezi i { background: var(--working); }
+.aline .atext { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aline.stoji .atext { color: #c7cddc; }
+.aline .ameta { color: var(--muted); font-size: 11px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aline .time { font-size: 11px; color: var(--muted); white-space: nowrap; }

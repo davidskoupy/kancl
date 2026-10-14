@@ -147,11 +147,20 @@ Běžné chaty claude.ai (mimo Claude Code) Kancl nevidí: nejsou na disku a API
 ## V projektech (sezení z aplikace)
 
 Hooky vidí jen sezení, která od startu serveru něco udělala. **V projektech** je proti tomu to, co se zrovna děje: každé
-nearchivované sezení aplikace Claude s aktivitou za posledních `appHours` hodin (výchozí 4), poskládané po projektech
-— včetně worktree. Běžící sezení má modrou tečku, rozdělaná z „K dokončení" zelenou, klik přepne do aplikace.
-Naplánované úlohy tu nejsou, ty patří do noční směny. Seznam je v mini režimu (sbalený na jeden řádek, stav si
-pamatuje), v panelu pod příslušným projektem (`3× dnes`, projekt s dnešní prací nespadne mezi schované klidné),
-v menu baru a na `GET /api/app`.
+nearchivované sezení aplikace Claude s aktivitou za posledních `appHours` hodin (výchozí 4). Naplánované úlohy tu
+nejsou, ty patří do noční směny.
+
+Řadí se **podle stavu, ne podle projektu** — aby bylo vidět, na čem se dělá, co stojí a co je potřeba posunout:
+
+| stav | co to je | jak vypadá |
+|------|----------|------------|
+| `ceka` | řeklo si o odpověď (`needs_action`) nebo se zaseklo (`blocked`, `review_ready`) | nahoře jako karta s otázkou, pod ní co sezení stihlo, a tlačítka *Otevřít sezení* / *Zkopírovat* |
+| `bezi` | zároveň o něm ví hook, čili pracuje | modrá tečka, jeden řádek |
+| `stoji` | doběhlo a leží | šedá tečka, jeden řádek (prvních 5 řádků, zbytek po rozkliknutí) |
+
+Řádek ukazuje, co sezení udělalo; projekt a název sezení jsou pod tím drobně. Čas je „jak dlouho už to tak je".
+Klik kamkoli otevře sezení v aplikaci Claude. Stejné tři skupiny jsou v mini režimu (sbalené na `čeká 3 · běží 2 ·
+stojí 3`) i v menu baru; projekt v panelu si nechává jen počet `3× dnes`. Data: `GET /api/app`.
 
 **Co sezení naposled udělalo** se bere ze shrnutí, které si aplikace Claude odkládá k sezení (`postTurnSummary`):
 šedý řádek pod názvem říká výsledek („deleted 138 merged claude/ branches; kept 1 with open PR"), žlutý `⚠` to,

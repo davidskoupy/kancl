@@ -17,7 +17,7 @@ struct WStock: Decodable { let project: String; let pending: Int; let alarm: Boo
 struct WSessions: Decodable { let total: Int; let working: Int; let attention: Int }
 struct WProject: Decodable { let name: String; let sessions: Int }
 struct WTodo: Decodable { let id: String; let title: String; let project: String; let folder: String?; let at: Double; let starred: Bool; let error: String?; let detail: String?; let action: String? }
-struct WApp: Decodable { let id: String; let title: String; let project: String; let folder: String?; let at: Double; let live: Bool; let todo: Bool; let starred: Bool; let detail: String?; let action: String? }
+struct WApp: Decodable { let id: String; let title: String; let project: String; let folder: String?; let at: Double; let live: Bool; let todo: Bool; let starred: Bool; let state: String?; let detail: String?; let action: String? }
 struct Widget: Decodable {
   let at: Double
   let sessions: WSessions
@@ -107,14 +107,15 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
   if !app.isEmpty {
     out.append(("—", "sep", nil))
     out.append(("V projektech · \(w.appCount ?? app.count)", "head", nil))
-    var byProject: [String: [WApp]] = [:]
-    for a in app { byProject[a.project, default: []].append(a) }
-    for (project, list) in byProject.sorted(by: { $0.value.count != $1.value.count ? $0.value.count > $1.value.count : $0.key < $1.key }) {
-      out.append(("\(project) · \(list.count)", "muted", nil))
-      for a in list.prefix(5) {
-        let mark = a.live ? "▶" : a.todo ? "📥" : a.starred ? "★" : "·"
-        out.append(("\(mark) \(a.title) · \(clock(a.at))", "app", a.id))
-        out.append(contentsOf: sumLines(a.detail, a.action))
+    // po stavech: co čeká na mě je nahoře, pak co běží, pak co jen doběhlo
+    for (state, label, mark) in [("ceka", "čeká na tebe", "⚠"), ("bezi", "teď běží", "▶"), ("stoji", "stojí", "·")] {
+      let list = app.filter { ($0.state ?? ($0.live ? "bezi" : "stoji")) == state }
+      if list.isEmpty { continue }
+      out.append(("\(label) · \(list.count)", "muted", nil))
+      for a in list.prefix(6) {
+        let text = state == "ceka" ? (a.action ?? a.detail ?? a.title) : (a.detail ?? a.title)
+        out.append(("\(a.starred ? "★" : mark) \(text.prefix(64)) · \(clock(a.at))", "app", a.id))
+        out.append(("      \(a.project)\(a.detail != nil || a.action != nil ? " · \(a.title)" : "")", "muted", nil))
       }
     }
   }

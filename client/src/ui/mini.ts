@@ -69,24 +69,31 @@ export class Mini {
     return this.night.snapshotAt ? Date.now() - this.night.snapshotAt > 2 * 3600_000 : false;
   }
 
-  /** „V projektech": co dnes v projektech jelo, i když o tom hook neví. Sbalené na jeden řádek. */
+  /** „V projektech": tři stavy — co běží, co čeká na tebe, co stojí. Sbalené na jeden řádek. */
   private renderApp(): string {
     if (!this.app.length) return '';
+    const ceka = this.app.filter(a => a.state === 'ceka');
+    const bezi = this.app.filter(a => a.state === 'bezi');
+    const stoji = this.app.filter(a => a.state === 'stoji');
     const head = `<button class="mappk" data-apptoggle="1" title="sezení z aplikace Claude za posledních pár hodin (naplánované úlohy jsou v noční směně)">v projektech <b>${this.app.length}</b> ${this.appOpen ? '▾' : '▸'}</button>`;
     if (!this.appOpen) {
-      const byProject = new Map<string, number>();
-      for (const a of this.app) byProject.set(a.project, (byProject.get(a.project) ?? 0) + 1);
-      const top = [...byProject.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3)
-        .map(([p, n]) => `${esc(p)} ${n}`).join(' · ');
-      return `<div class="mapp">${head}<span class="mappsum">${top}</span></div>`;
+      const sum = [
+        ceka.length ? `<b class="mask">čeká ${ceka.length}</b>` : '',
+        bezi.length ? `běží ${bezi.length}` : '',
+        stoji.length ? `stojí ${stoji.length}` : '',
+      ].filter(Boolean).join(' · ');
+      return `<div class="mapp">${head}<span class="mappsum">${sum}</span></div>`;
     }
-    const groups = new Map<string, AppSession[]>();
-    for (const a of this.app) (groups.get(a.project) ?? groups.set(a.project, []).get(a.project)!).push(a);
-    const body = [...groups.entries()].map(([project, list]) => `
-      <div class="mgroup"><span class="mgname">${esc(project)}</span><span class="mgn">${list.length}</span></div>
-      ${list.map(a => `<span class="marow ${a.live ? 'live' : ''} ${a.todo ? 'todo' : ''}" data-aid="${esc(a.desktopId)}" title="${esc(a.folder ?? '')}${a.turns ? ` · ${a.turns} tahů` : ''}">
-        <i></i><span class="matt">${a.starred ? '★ ' : ''}${esc(a.title)}</span><span class="mat">${clockOf(a.lastActivityAt)}</span>${miniSum(a.summary)}
-      </span>`).join('')}`).join('');
+    const group = (label: string, list: AppSession[], cls: string) => list.length ? `
+      <div class="mgroup ${cls}"><span class="mgname">${label}</span><span class="mgn">${list.length}</span></div>
+      ${list.map(a => {
+        const text = a.state === 'ceka' ? (a.summary?.action ?? a.summary?.detail ?? a.title) : (a.summary?.detail ?? a.title);
+        return `<span class="marow ${cls}" data-aid="${esc(a.desktopId)}" title="${esc(a.title)}${a.folder ? ` · ${esc(a.folder)}` : ''}">
+          <i></i><span class="matt">${a.starred ? '★ ' : ''}${esc(text)}</span><span class="mat">${clockOf(a.lastActivityAt)}</span>
+          <small class="masum">${esc(a.project)}${a.summary ? ` · ${esc(a.title)}` : ''}</small>
+        </span>`;
+      }).join('')}` : '';
+    const body = group('čeká na tebe', ceka, 'ceka') + group('teď běží', bezi, 'bezi') + group('stojí', stoji, 'stoji');
     return `<div class="mapp open">${head}${body}</div>`;
   }
 

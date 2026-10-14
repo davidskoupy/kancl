@@ -88,6 +88,7 @@ export class Panel {
   private app: AppSession[] = [];
   private appProjects = new Set<string>();
   private showAllTodo = false;
+  private showAllApp = false;
   private sel: Sel = null;
   private filter: 'all' | 'attention' = (localStorage.getItem('kancl.filter') as any) || 'all';
   private showAllKlid = localStorage.getItem('kancl.showAllKlid') === '1';
@@ -224,7 +225,7 @@ export class Panel {
 
     let n = 0;                          // číslování sezení
     let klidShown = 0, klidHidden = 0;
-    const html: string[] = [];
+    const html: string[] = [this.renderApp()];
     let lastGroup: string | null | undefined = undefined;
     const showGroups = this.projects.some(p => p.group);
     for (const g of groups) {
@@ -233,6 +234,7 @@ export class Panel {
       const isKlid = status === 'klid';
       const pinned = !!p && this.pinned.has(p.id);
       const appHere = appByProject.get(p?.id ?? LOOSE_ID) ?? [];
+      if (!p && !g.sessions.length) continue;   // „mimo projekty" bez sezení hooku by byl prázdný řádek
       if (isKlid && !pinned && !appHere.length && !this.query && !this.showAllKlid && klidShown >= KLID_VISIBLE) { klidHidden++; continue; }
       if (isKlid && !pinned) klidShown++;
       // záhlaví: „v práci" pro aktivní/připnuté, pak skupiny z configu pro klidné
@@ -243,7 +245,7 @@ export class Panel {
         lastGroup = groupName;
       }
       const id = p?.id ?? LOOSE_ID;
-      const open = !isKlid || appHere.length > 0 || (this.sel?.kind === 'project' && this.sel.id === id);
+      const open = !isKlid || (this.sel?.kind === 'project' && this.sel.id === id);   // sezení z aplikace mají vlastní sekci nahoře, projekt kvůli nim neotvírám
       const selected = this.sel?.kind === 'project' && this.sel.id === id;
       const sessionsHtml = g.sessions.map(s => {
         const idx = n++;
@@ -262,16 +264,6 @@ export class Panel {
             </div>
           </li>${subs}`;
       }).join('');
-      const appHtml = appHere.map(a => `
-        <li class="appses ${a.todo ? 'todo' : ''}" data-aid="${esc(a.desktopId)}" title="${esc(a.cwd ?? '')}\notevřít v aplikaci Claude">
-          <div class="bar"></div>
-          <div>
-            <div class="name"><span>${a.starred ? '★ ' : ''}${esc(a.title)}</span><span class="proj">${a.todo ? 'k dokončení' : 'dnes'}</span></div>
-            ${sumHtml(a.summary)}
-            ${a.folder ? `<div class="folder">📁 ${esc(a.folder)}</div>` : ''}
-          </div>
-          <div class="time">${dayClock(a.lastActivityAt).replace('dnes ', '')}</div>
-        </li>`).join('');
       html.push(`
         <li class="proj ${status} ${open ? 'open' : ''} ${selected ? 'selected' : ''}" data-pid="${esc(id)}">
           <div class="proj-row">
@@ -280,7 +272,7 @@ export class Panel {
             <span class="phost">${p ? `<button class="pin ${pinned ? 'on' : ''}" data-pin="${esc(p.id)}" title="${pinned ? 'odepnout' : 'připnout nahoru'}">📌</button>${HOST_LABEL[p.host]}` : ''}</span>
             <span class="pmeta">${[p ? this.projectMeta(p) : (g.sessions.length ? `${g.sessions.length} ${plural(g.sessions.length, 'sezení', 'sezení', 'sezení')}` : ''), appHere.length ? `<span class="pmapp" title="sezení z aplikace za posledních pár hodin">${appHere.length}× dnes</span>` : ''].filter(Boolean).join(' · ')}</span>
           </div>
-          <ul class="sessions">${sessionsHtml}${appHtml}</ul>
+          <ul class="sessions">${sessionsHtml}</ul>
         </li>`);
     }
     if (klidHidden) html.push(`<li class="more" data-more="1">+ ${klidHidden} ${plural(klidHidden, 'další', 'další', 'dalších')}</li>`);
@@ -288,7 +280,13 @@ export class Panel {
     html.push(this.renderTodo());
     html.push(this.renderNight());
     this.list.innerHTML = html.join('');
-    this.list.querySelectorAll<HTMLElement>('.appses').forEach(li => li.addEventListener('click', e => { e.stopPropagation(); this.events.onAppFocus(li.dataset.aid!); }));
+    this.list.querySelectorAll<HTMLElement>('[data-aid]').forEach(li => li.addEventListener('click', e => { e.stopPropagation(); this.events.onAppFocus(li.dataset.aid!); }));
+    this.list.querySelectorAll<HTMLButtonElement>('[data-acopy]').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation();
+      navigator.clipboard?.writeText(b.dataset.acopy!);
+      const was = b.textContent; b.textContent = 'zkopírováno'; setTimeout(() => { b.textContent = was; }, 1400);
+    }));
+    this.list.querySelector<HTMLElement>('[data-amore]')?.addEventListener('click', e => { e.stopPropagation(); this.showAllApp = !this.showAllApp; this.render(); });
     this.list.querySelectorAll<HTMLElement>('.todo').forEach(li => li.addEventListener('click', () => this.events.onTodoFocus(li.dataset.tid!)));
     this.list.querySelectorAll<HTMLElement>('[data-tdone]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); this.events.onTodoDismiss(b.dataset.tdone!); }));
     this.list.querySelector<HTMLElement>('[data-tmore]')?.addEventListener('click', () => { this.showAllTodo = !this.showAllTodo; this.render(); });
@@ -324,6 +322,73 @@ export class Panel {
 
     this.renderSummary(all);
     this.renderDetails();
+  }
+
+  /**
+   * „V projektech" po stavech, ne po projektech: co běží, co se zastavilo a chce mě,
+   * a co jen doběhlo a leží. Projekt je u řádku jen popiskem.
+   */
+  private renderApp(): string {
+    const q = this.query;
+    let items = this.app;
+    if (q) items = items.filter(a => `${a.title} ${a.project} ${a.summary?.detail ?? ''} ${a.summary?.action ?? ''}`.toLowerCase().includes(q));
+    if (this.filter === 'attention') items = items.filter(a => a.state === 'ceka');
+    if (!items.length) return '';
+
+    const ceka = items.filter(a => a.state === 'ceka');
+    const bezi = items.filter(a => a.state === 'bezi');
+    const stoji = items.filter(a => a.state === 'stoji');
+
+    const card = (a: AppSession) => {
+      const ask = a.summary?.action ?? a.summary?.detail ?? a.title;
+      const did = a.summary?.action && a.summary.detail ? a.summary.detail : '';
+      return `
+        <li class="acard" data-aid="${esc(a.desktopId)}" title="${esc(a.cwd ?? '')}\notevřít v aplikaci Claude">
+          <div class="ahead">
+            <span class="aproj">${esc(a.project)}</span>
+            <span class="atitle">${a.starred ? '★ ' : ''}${esc(a.title)}</span>
+            <span class="time" data-since="${a.lastActivityAt}">${ago(a.lastActivityAt)}</span>
+          </div>
+          <div class="aask">${esc(ask)}</div>
+          ${did ? `<div class="adid">udělalo: ${esc(did)}</div>` : ''}
+          <div class="aacts">
+            <button class="aopen" type="button">Otevřít sezení</button>
+            <button class="acopy" type="button" data-acopy="${esc(ask)}">Zkopírovat</button>
+          </div>
+        </li>`;
+    };
+
+    const line = (a: AppSession) => {
+      const text = a.summary?.detail ?? a.summary?.action ?? a.title;
+      const meta = [a.project, a.summary ? a.title : '', a.todo ? 'k dokončení' : ''].filter(Boolean).join(' · ');
+      return `
+        <li class="aline ${a.state}" data-aid="${esc(a.desktopId)}" title="${esc(a.cwd ?? '')}\notevřít v aplikaci Claude">
+          <i></i>
+          <div>
+            <div class="atext">${a.starred ? '★ ' : ''}${esc(text)}</div>
+            <div class="ameta">${esc(meta)}</div>
+          </div>
+          <div class="time" data-since="${a.lastActivityAt}">${ago(a.lastActivityAt)}</div>
+        </li>`;
+    };
+
+    const LIMIT = 5;
+    const klidne = [...bezi, ...stoji];
+    const shown = this.showAllApp || q ? klidne : klidne.slice(0, LIMIT);
+    const more = klidne.length > LIMIT && !q
+      ? `<li class="more" data-amore="1">${this.showAllApp ? 'sbalit' : `+ ${klidne.length - LIMIT} ${plural(klidne.length - LIMIT, 'další', 'další', 'dalších')}`}</li>`
+      : '';
+    const head = (label: string, n: number, cls = '') => `<li class="nhead ${cls}"><span>${label}</span><span class="muted">${n}</span></li>`;
+
+    return [
+      `<li class="nhead apphead"><span>V projektech</span><span class="muted">${items.length} ${plural(items.length, 'sezení', 'sezení', 'sezení')} za pár hodin</span></li>`,
+      ceka.length ? head('Čeká na tebe', ceka.length, 'ask') + ceka.map(card).join('') : '',
+      shown.filter(a => a.state === 'bezi').length ? head('Teď běží', bezi.length) : '',
+      shown.filter(a => a.state === 'bezi').map(line).join(''),
+      shown.filter(a => a.state === 'stoji').length ? head('Stojí', stoji.length) : '',
+      shown.filter(a => a.state === 'stoji').map(line).join(''),
+      more,
+    ].join('');
   }
 
   private renderTodo(): string {

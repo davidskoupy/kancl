@@ -89,3 +89,23 @@ test('buildAppSessions: sezení, které na mě čeká, je hned za živými', () 
   assert.deepEqual(out.map(a => a.desktopId), ['a', 'c', 'b']);
   assert.equal(out[1].summary?.action, 'dej mi heslo', 'shrnutí se propíše do seznamu');
 });
+
+test('buildAppSessions: tři stavy — běží, čeká na tebe, stojí', () => {
+  const list = [
+    { ...base, desktopId: 'bezi', title: 'Pracuje', lastActivityAt: now - 5 * h, cliSessionId: 'ca', cwd: '/c/deky' },
+    { ...base, desktopId: 'stoji', title: 'Doběhlo', lastActivityAt: now - 60_000, cwd: '/c/deky', summary: { category: 'completed' as const, detail: 'hotovo' } },
+    { ...base, desktopId: 'ptal', title: 'Ptá se', lastActivityAt: now - 3 * h, cwd: '/c/deky', summary: { category: 'blocked' as const, action: 'dej mi heslo' } },
+    { ...base, desktopId: 'blok', title: 'Zaseklo se bez otázky', lastActivityAt: now - 2 * h, cwd: '/c/deky', summary: { category: 'blocked' as const, detail: 'čeká na rozhodnutí' } },
+    { ...base, desktopId: 'kouk', title: 'K nahlédnutí', lastActivityAt: now - 4 * h, cwd: '/c/deky', summary: { category: 'review_ready' as const, detail: 'návrh k posouzení' } },
+    { ...base, desktopId: 'nic', title: 'Bez shrnutí', lastActivityAt: now - 30 * 60_000, cwd: '/c/deky' },
+  ];
+  const out = buildAppSessions(list, now, { hours: 12, liveCli: new Set(['ca']) });
+  const state = (id: string) => out.find(a => a.desktopId === id)!.state;
+  assert.equal(state('bezi'), 'bezi', 'živé běží, i když je starší');
+  assert.equal(state('ptal'), 'ceka');
+  assert.equal(state('blok'), 'ceka', 'blocked čeká i bez otázky');
+  assert.equal(state('kouk'), 'ceka', 'review_ready chce, abych se podíval');
+  assert.equal(state('stoji'), 'stoji');
+  assert.equal(state('nic'), 'stoji', 'bez shrnutí jen leží');
+  assert.deepEqual(out.map(a => a.desktopId), ['bezi', 'blok', 'ptal', 'kouk', 'stoji', 'nic'], 'běží → čeká → stojí, uvnitř od nejnovějšího');
+});
