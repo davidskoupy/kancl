@@ -17,6 +17,7 @@ struct WStock: Decodable { let project: String; let pending: Int; let alarm: Boo
 struct WSessions: Decodable { let total: Int; let working: Int; let attention: Int }
 struct WProject: Decodable { let name: String; let sessions: Int }
 struct WTodo: Decodable { let id: String; let title: String; let project: String; let folder: String?; let at: Double; let starred: Bool; let error: String? }
+struct WApp: Decodable { let id: String; let title: String; let project: String; let folder: String?; let at: Double; let live: Bool; let todo: Bool; let starred: Bool }
 struct Widget: Decodable {
   let at: Double
   let sessions: WSessions
@@ -27,6 +28,8 @@ struct Widget: Decodable {
   let stock: [WStock]
   let todo: [WTodo]
   let todoCount: Int
+  let app: [WApp]?
+  let appCount: Int?
 }
 
 let base = ProcessInfo.processInfo.environment["KANCL_URL"] ?? "http://127.0.0.1:4242"
@@ -89,6 +92,20 @@ func lines(_ w: Widget) -> [(text: String, kind: String, ref: String?)] {
       let mark = t.error != nil ? "‼️" : t.starred ? "★" : "📥"
       out.append(("\(mark) \(t.title) [\(t.project)] · \(ago(t.at))", "todo", t.id))
       if let f = t.folder, !f.isEmpty { out.append(("      📁 \(f)", "muted", nil)) }
+    }
+  }
+  let app = w.app ?? []
+  if !app.isEmpty {
+    out.append(("—", "sep", nil))
+    out.append(("V projektech · \(w.appCount ?? app.count)", "head", nil))
+    var byProject: [String: [WApp]] = [:]
+    for a in app { byProject[a.project, default: []].append(a) }
+    for (project, list) in byProject.sorted(by: { $0.value.count != $1.value.count ? $0.value.count > $1.value.count : $0.key < $1.key }) {
+      out.append(("\(project) · \(list.count)", "muted", nil))
+      for a in list.prefix(5) {
+        let mark = a.live ? "▶" : a.todo ? "📥" : a.starred ? "★" : "·"
+        out.append(("\(mark) \(a.title) · \(clock(a.at))", "app", a.id))
+      }
     }
   }
   out.append(("—", "sep", nil))
@@ -535,6 +552,8 @@ final class Bar: NSObject, NSMenuDelegate {
         mi.action = #selector(focus(_:)); mi.target = self; mi.representedObject = l.ref
       case "todo":
         mi.action = #selector(focusTodo(_:)); mi.target = self; mi.representedObject = l.ref
+      case "app":
+        mi.action = #selector(focusApp(_:)); mi.target = self; mi.representedObject = l.ref
       case "ci":
         if let u = l.ref { mi.action = #selector(openUrl(_:)); mi.target = self; mi.representedObject = u }
       case "head":
@@ -601,6 +620,17 @@ final class Bar: NSObject, NSMenuDelegate {
     }
     guard let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
           let url = URL(string: "\(base)/api/sessions/\(enc)/focus") else { return }
+    var req = URLRequest(url: url); req.httpMethod = "POST"
+    URLSession.shared.dataTask(with: req).resume()
+  }
+
+  @objc func focusApp(_ sender: NSMenuItem) {
+    guard let id = sender.representedObject as? String,
+          let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+          let url = URL(string: "\(base)/api/app/\(enc)/focus") else { return }
+    if let a = last?.app?.first(where: { $0.id == id }) {
+      NSPasteboard.general.clearContents(); NSPasteboard.general.setString(a.title, forType: .string)
+    }
     var req = URLRequest(url: url); req.httpMethod = "POST"
     URLSession.shared.dataTask(with: req).resume()
   }

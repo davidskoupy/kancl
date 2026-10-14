@@ -9,11 +9,11 @@ import { focusTerminal } from './focus.ts';
 import { loadConfig } from './config.ts';
 import { Scanner } from './scanner.ts';
 import { NightScanner } from './nightScanner.ts';
-import { DesktopIndex, buildTodo } from './desktop.ts';
+import { DesktopIndex, buildTodo, buildAppSessions } from './desktop.ts';
 import { attentionQueue, needsYou } from '../shared/attention.ts';
 import { isCiStale } from '../shared/ci.ts';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import type { Todo } from '../shared/types.ts';
+import type { AppSession, Todo } from '../shared/types.ts';
 import { History, digest as buildDigest } from './history.ts';
 import { expandHome } from './config.ts';
 import type { ServerMessage } from '../shared/types.ts';
@@ -41,8 +41,26 @@ function refreshTodo() {
   lastTodoJson = j; todo = next;
   const line = `data: ${JSON.stringify({ type: 'todo', todo } satisfies ServerMessage)}\n\n`;
   for (const res of clients) res.write(line);
+  refreshApp();
 }
-const desktop = new DesktopIndex(undefined, () => { store.refreshDesktop(); refreshTodo(); });
+// ---- v projektech (sezení z aplikace, i když o nich hook neví) ----
+let app: AppSession[] = [];
+let lastAppJson = '';
+function refreshApp() {
+  const liveCli = new Set(store.list().map(s => s.id));
+  const todoIds = new Set(todo.map(t => t.desktopId));
+  const next = buildAppSessions(desktop.all(), Date.now(), {
+    hours: config.appHours, liveCli, todoIds,
+    projectName: cwd => { const id = store.projectResolver?.(cwd); return id ? scanner.projects.find(p => p.id === id)?.name : undefined; },
+    projectId: cwd => store.projectResolver?.(cwd),
+  });
+  const j = JSON.stringify(next);
+  if (j === lastAppJson) return;
+  lastAppJson = j; app = next;
+  const line = `data: ${JSON.stringify({ type: 'app', app } satisfies ServerMessage)}\n\n`;
+  for (const res of clients) res.write(line);
+}
+const desktop = new DesktopIndex(undefined, () => { store.refreshDesktop(); refreshTodo(); refreshApp(); });
 store.desktopResolver = id => { const d = desktop.lookup(id); return d ? { desktopId: d.desktopId, title: d.title, lastFocusedAt: d.lastFocusedAt } : undefined; };
 const night = new NightScanner(config, store, n => {
   const msg: ServerMessage = { type: 'night', night: n };
@@ -81,7 +99,7 @@ store.onSessionEnd = (s, reason) => {
 store.listeners.add((m: ServerMessage) => {
   const line = `data: ${JSON.stringify(m)}\n\n`;
   for (const res of clients) res.write(line);
-  if (m.type === 'upsert' || m.type === 'remove') { scanner.publish(); refreshTodo(); }
+  if (m.type === 'upsert' || m.type === 'remove') { scanner.publish(); refreshTodo(); refreshApp(); }
 });
 
 setInterval(() => {
@@ -90,6 +108,9 @@ setInterval(() => {
   });
   for (const res of clients) res.write(': keepalive\n\n');
 }, 5000).unref();
+
+// okno „nedávno" se posouvá, i když se žádný soubor nezměnil
+setInterval(() => { refreshTodo(); refreshApp(); }, 60_000).unref();
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -192,6 +213,18 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ...d, waitingNow: waiting, ciFailingNow: ci, stockNow: night.night.stock, snapshotAt: night.night.snapshotAt });
     }
 
+    // ---- v projektech ----
+    if (req.method === 'GET' && path === '/api/app') return json(res, 200, { app, hours: config.appHours });
+    const appFocus = path.match(/^\/api\/app\/([^/]+)\/focus$/);
+    if (req.method === 'POST' && appFocus) {
+      const id = decodeURIComponent(appFocus[1]);
+      const a = app.find(x => x.desktopId === id);
+      if (!a) return json(res, 404, { error: 'neznámé' });
+      if (a.cliSessionId) store.markSeen(a.cliSessionId);
+      const result = await focusTerminal({}, a.desktopId, a.title);
+      return json(res, 200, { ok: true, result });
+    }
+
     // ---- k dokončení ----
     if (req.method === 'GET' && path === '/api/todo') return json(res, 200, { todo });
     const todoDismiss = path.match(/^\/api\/todo\/([^/]+)\/dismiss$/);
@@ -236,6 +269,8 @@ const server = http.createServer(async (req, res) => {
         stock: night.night.stock?.items ?? [],
         todo: todo.slice(0, 8).map(t => ({ id: t.desktopId, title: t.title, project: t.project, folder: t.folder ?? null, at: t.lastActivityAt, starred: t.starred, error: t.error ?? null })),
         todoCount: todo.length,
+        app: app.slice(0, 12).map(a => ({ id: a.desktopId, title: a.title, project: a.project, folder: a.folder ?? null, at: a.lastActivityAt, live: a.live, todo: a.todo, starred: a.starred })),
+        appCount: app.length,
       };
       return json(res, 200, body);
     }
@@ -260,7 +295,7 @@ const server = http.createServer(async (req, res) => {
         'Access-Control-Allow-Origin': '*',
       });
       res.write('retry: 2000\n\n');
-      const snapshot: ServerMessage = { type: 'snapshot', sessions: store.list(), projects: scanner.projects, night: night.night, todo, serverStartedAt: store.serverStartedAt };
+      const snapshot: ServerMessage = { type: 'snapshot', sessions: store.list(), projects: scanner.projects, night: night.night, todo, app, serverStartedAt: store.serverStartedAt };
       res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
       clients.add(res);
       req.on('close', () => clients.delete(res));
@@ -299,7 +334,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   console.log(`Kancl → http://${HOST}:${PORT}`);
   history.load().catch(e => console.error('[history]', e));
-  desktop.start().then(() => refreshTodo()).catch(e => console.error('[desktop]', e));
+  desktop.start().then(() => { refreshTodo(); refreshApp(); }).catch(e => console.error('[desktop]', e));
   scanner.start().then(() => night.start()).catch(e => console.error('[scanner]', e));
   console.log(`  hooky posílají POST http://${HOST}:${PORT}/hook`);
   if (!existsSync(join(DIST, 'index.html'))) {

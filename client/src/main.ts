@@ -13,6 +13,7 @@ async function bootMini() {
   // attention musí vzniknout dřív než panel: hlavička si hned při prvním vykreslení čte stav přepínačů
   const attention = new Attention({ onOpen: id => client.focus(id) });
   const mini = new Mini(host, async id => { try { await client.focus(id); } catch { /* server neodpovídá */ } }, async id => { try { await client.todoFocus(id); } catch { /* server neodpovídá */ } }, async id => { try { await client.todoDismiss(id); } catch { /* server neodpovídá */ } },
+    async id => { try { await client.appFocus(id); } catch { /* server neodpovídá */ } },
     { get: () => ({ notify: attention.notify, sound: attention.sound }), setNotify: on => attention.setNotify(on), setSound: on => attention.setSound(on) });
   client = new KanclClient({
     onUpsert: s => mini.upsert(s),
@@ -21,6 +22,7 @@ async function bootMini() {
     onProjects: () => {},
     onNight: n => mini.setNight(n),
     onTodo: t => mini.setTodo(t),
+    onApp: a => mini.setApp(a),
   });
   client.events.onNight = n => { mini.setNight(n); attention.setNight(n); };
   client.events.onUpsert = s => { mini.upsert(s); attention.upsert(s); };
@@ -56,6 +58,11 @@ async function boot() {
     onOpenFile: async path => panel.showToast(await client.openFile(path).catch(() => 'Server neodpovídá')),
     onTodoFocus: async id => { const t = client.todo.find(x => x.desktopId === id); if (t) navigator.clipboard?.writeText(t.title).catch(() => {}); panel.showToast(await client.todoFocus(id).catch(() => 'Server neodpovídá')); },
     onTodoDismiss: id => client.todoDismiss(id),
+    onAppFocus: async id => {
+      const a = client.app.find(x => x.desktopId === id);
+      if (a) navigator.clipboard?.writeText(a.title).catch(() => {});
+      panel.showToast(await client.appFocus(id).catch(() => 'Server neodpovídá'));
+    },
   });
 
   scene = new Scene(host, {
@@ -79,6 +86,7 @@ async function boot() {
     onProjects: p => { scene.setProjects(p); panel.setProjects(p); },
     onNight: n => { scene.setNight(n); panel.setNight(n); attention.setNight(n); },
     onTodo: t => panel.setTodo(t),
+    onApp: a => panel.setApp(a),
   });
 
   async function focus(id: string) {

@@ -131,6 +131,26 @@ export interface Todo {
   turns?: number;
 }
 
+/**
+ * Sezení v desktopové aplikaci Claude, které v projektu nedávno něco dělalo — i když právě neběží.
+ * Doplňuje živá sezení z hooků: po restartu serveru nebo u sezení, co dnes dojela, Kancl o nich jinak neví.
+ */
+export interface AppSession {
+  desktopId: string;
+  cliSessionId?: string;
+  title: string;
+  project: string;         // název projektu (nebo složky)
+  projectId?: string;      // Project.id, pokud cwd leží v naskenovaném projektu
+  folder?: string;         // čitelná složka (~/Code/x › worktree)
+  cwd?: string;
+  lastActivityAt: number;
+  lastFocusedAt?: number;
+  starred: boolean;
+  turns?: number;
+  live: boolean;           // zároveň o něm ví hook (běží)
+  todo: boolean;           // zároveň je v „K dokončení"
+}
+
 export interface SessionEvent {
   at: number;
   event: string;     // hook_event_name
@@ -169,8 +189,9 @@ export interface Session {
 }
 
 export type ServerMessage =
-  | { type: 'snapshot'; sessions: Session[]; projects: Project[]; night: NightShift; todo: Todo[]; serverStartedAt: number }
+  | { type: 'snapshot'; sessions: Session[]; projects: Project[]; night: NightShift; todo: Todo[]; app: AppSession[]; serverStartedAt: number }
   | { type: 'todo'; todo: Todo[] }
+  | { type: 'app'; app: AppSession[] }
   | { type: 'projects'; projects: Project[] }
   | { type: 'night'; night: NightShift }
   | { type: 'upsert'; session: Session }

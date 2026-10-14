@@ -1,4 +1,4 @@
-import type { Session, NightShift, SessionStatus, Todo } from '../../../shared/types.ts';
+import type { Session, NightShift, SessionStatus, Todo, AppSession } from '../../../shared/types.ts';
 
 /** Mini režim (?mini=1): pruh do rohu obrazovky — souhrn, fronta „chce mě", noční směna. */
 const LABEL: Record<SessionStatus, string> = { permission: 'dotaz', error: 'chyba', waiting: 'čeká', completed: 'hotovo', working: 'práce', idle: 'klid' };
@@ -10,6 +10,10 @@ function ago(ts: number): string {
   if (m < 60) return `${m} min`;
   return `${Math.floor(m / 60)} h ${m % 60} min`;
 }
+function clockOf(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 function esc(s: string): string { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!)); }
 
 import { attentionQueue, needsYou } from '../../../shared/attention.ts';
@@ -20,6 +24,8 @@ export class Mini {
   private sessions = new Map<string, Session>();
   private night: NightShift = { jobs: [], cloudSessions: [], scannedAt: 0 };
   private todo: Todo[] = [];
+  private app: AppSession[] = [];
+  private appOpen = localStorage.getItem('kancl.mini.app') === '1';
   private lastHtml = '';
   private lastSnapOld = false;
 
@@ -28,6 +34,7 @@ export class Mini {
     private onFocus: (id: string) => void,
     private onTodo?: (id: string) => void,
     private onTodoDone?: (id: string) => void,
+    private onApp?: (id: string) => void,
     private prefs?: { get: () => { notify: boolean; sound: boolean }; setNotify: (on: boolean) => Promise<boolean>; setSound: (on: boolean) => void },
   ) {
     this.root = host;
@@ -41,6 +48,7 @@ export class Mini {
   remove(id: string) { this.sessions.delete(id); this.render(); }
   setNight(n: NightShift) { this.night = n; this.render(); }
   setTodo(t: Todo[]) { this.todo = t; this.render(); }
+  setApp(a: AppSession[]) { this.app = a; this.render(); }
 
   /** Pomalý tik: přepsat časy, a když se změnilo stáří snímku cloudu, překreslit celé. */
   private tick() {
@@ -53,6 +61,27 @@ export class Mini {
 
   private snapOld(): boolean {
     return this.night.snapshotAt ? Date.now() - this.night.snapshotAt > 2 * 3600_000 : false;
+  }
+
+  /** „V projektech": co dnes v projektech jelo, i když o tom hook neví. Sbalené na jeden řádek. */
+  private renderApp(): string {
+    if (!this.app.length) return '';
+    const head = `<button class="mappk" data-apptoggle="1" title="sezení z aplikace Claude za posledních pár hodin (naplánované úlohy jsou v noční směně)">v projektech <b>${this.app.length}</b> ${this.appOpen ? '▾' : '▸'}</button>`;
+    if (!this.appOpen) {
+      const byProject = new Map<string, number>();
+      for (const a of this.app) byProject.set(a.project, (byProject.get(a.project) ?? 0) + 1);
+      const top = [...byProject.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3)
+        .map(([p, n]) => `${esc(p)} ${n}`).join(' · ');
+      return `<div class="mapp">${head}<span class="mappsum">${top}</span></div>`;
+    }
+    const groups = new Map<string, AppSession[]>();
+    for (const a of this.app) (groups.get(a.project) ?? groups.set(a.project, []).get(a.project)!).push(a);
+    const body = [...groups.entries()].map(([project, list]) => `
+      <div class="mgroup"><span class="mgname">${esc(project)}</span><span class="mgn">${list.length}</span></div>
+      ${list.map(a => `<span class="marow ${a.live ? 'live' : ''} ${a.todo ? 'todo' : ''}" data-aid="${esc(a.desktopId)}" title="${esc(a.folder ?? '')}${a.turns ? ` · ${a.turns} tahů` : ''}">
+        <i></i><span class="matt">${a.starred ? '★ ' : ''}${esc(a.title)}</span><span class="mat">${clockOf(a.lastActivityAt)}</span>
+      </span>`).join('')}`).join('');
+    return `<div class="mapp open">${head}${body}</div>`;
   }
 
   private render() {
@@ -82,6 +111,7 @@ export class Mini {
       <ul class="mlist">${rows || '<li class="mempty">nikdo tě nepotřebuje</li>'}</ul>
       ${workingProjects.length ? `<div class="mwork">v práci: ${workingProjects.map(esc).join(' · ')}</div>` : ''}
       ${this.todo.length ? `<div class="mtodo"><span class="mk">k dokončení ${this.todo.length}</span>${this.todo.slice(0, 3).map(t => `<span class="mt" data-tid="${esc(t.desktopId)}" title="${esc(t.folder ?? '')}"><span class="mtt">${t.starred ? '★ ' : ''}${esc(t.title)} <small>${esc(t.project)}</small></span>${t.folder ? `<small class="mtf">📁 ${esc(t.folder)}</small>` : ''}<button class="mtdone" data-tdone="${esc(t.desktopId)}" title="odškrtnout">✓</button></span>`).join('')}</div>` : ''}
+      ${this.renderApp()}
       <div class="mfoot ${jobsErr ? 'err' : ''}">
         noční směna: ${jobsOk} ✓${jobsErr ? ` · <b>${jobsErr} ✗</b>` : ''}${next ? ` · další ${esc(next.name)} ${clock(next.nextRunAt!)}` : ''}${snapOld ? ' · <span class="old">cloud zastaralý</span>' : ''}
       </div>`;
@@ -93,6 +123,13 @@ export class Mini {
     this.root.querySelectorAll<HTMLElement>('.mrow').forEach(li => li.addEventListener('click', () => this.onFocus(li.dataset.id!)));
     this.root.querySelectorAll<HTMLElement>('.mt').forEach(el => el.addEventListener('click', () => this.onTodo?.(el.dataset.tid!)));
     this.root.querySelectorAll<HTMLElement>('[data-tdone]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); this.onTodoDone?.(b.dataset.tdone!); }));
+    this.root.querySelector<HTMLElement>('[data-apptoggle]')?.addEventListener('click', () => {
+      this.appOpen = !this.appOpen;
+      localStorage.setItem('kancl.mini.app', this.appOpen ? '1' : '0');
+      this.lastHtml = '';
+      this.render();
+    });
+    this.root.querySelectorAll<HTMLElement>('[data-aid]').forEach(el => el.addEventListener('click', () => this.onApp?.(el.dataset.aid!)));
     this.root.querySelectorAll<HTMLElement>('[data-pref]').forEach(b => b.addEventListener('click', async () => {
       if (!this.prefs) return;
       if (b.dataset.pref === 'notify') await this.prefs.setNotify(!this.prefs.get().notify);

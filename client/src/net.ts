@@ -1,4 +1,4 @@
-import type { Session, ServerMessage, Project, NightShift, Todo } from '../../shared/types.ts';
+import type { Session, ServerMessage, Project, NightShift, Todo, AppSession } from '../../shared/types.ts';
 
 export type ConnState = 'connecting' | 'ok' | 'error' | 'demo';
 
@@ -9,6 +9,7 @@ export interface ClientEvents {
   onProjects: (projects: Project[]) => void;
   onNight: (night: NightShift) => void;
   onTodo: (todo: Todo[]) => void;
+  onApp?: (app: AppSession[]) => void;
 }
 
 export class KanclClient {
@@ -16,6 +17,7 @@ export class KanclClient {
   projects: Project[] = [];
   night: NightShift = { jobs: [], cloudSessions: [], scannedAt: 0 };
   todo: Todo[] = [];
+  app: AppSession[] = [];
   state: ConnState = 'connecting';
   private es?: EventSource;
 
@@ -50,11 +52,17 @@ export class KanclClient {
         this.events.onNight(this.night);
         this.todo = msg.todo ?? [];
         this.events.onTodo(this.todo);
+        this.app = msg.app ?? [];
+        this.events.onApp?.(this.app);
         break;
       }
       case 'todo':
         this.todo = msg.todo;
         this.events.onTodo(this.todo);
+        break;
+      case 'app':
+        this.app = msg.app;
+        this.events.onApp?.(this.app);
         break;
       case 'night':
         this.night = msg.night;
@@ -85,6 +93,14 @@ export class KanclClient {
   async todoFocus(id: string): Promise<string> {
     if (this.state === 'demo') return 'demo: tady bych otevřel sezení';
     const r = await fetch(`/api/todo/${encodeURIComponent(id)}/focus`, { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    return j.result ?? j.error ?? 'done';
+  }
+
+  /** Otevřít sezení z aplikace (deep link přes desktopId). */
+  async appFocus(id: string): Promise<string> {
+    if (this.state === 'demo') return 'demo: tady bych otevřel sezení';
+    const r = await fetch(`/api/app/${encodeURIComponent(id)}/focus`, { method: 'POST' });
     const j = await r.json().catch(() => ({}));
     return j.result ?? j.error ?? 'done';
   }

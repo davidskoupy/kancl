@@ -84,7 +84,7 @@ export class DesktopIndex {
   }
 }
 
-import type { Todo } from '../shared/types.ts';
+import type { AppSession, Todo } from '../shared/types.ts';
 import { folderInfo } from '../shared/folder.ts';
 
 const DAY = 24 * 3600_000;
@@ -112,4 +112,48 @@ export function buildTodo(sessions: DesktopSession[], now: number, liveCli: Set<
     });
   }
   return out.sort((a, b) => Number(b.starred) - Number(a.starred) || b.lastActivityAt - a.lastActivityAt).slice(0, 40);
+}
+
+/**
+ * „V projektech": sezení z desktopové aplikace, která nedávno (`hours`) něco dělala, ať už o nich
+ * hook ví nebo ne. Naplánované úlohy se vynechávají — ty patří do noční směny. Živá a rozpracovaná
+ * sezení zůstávají v seznamu označená (`live`, `todo`), ať je po projektech vidět celý den práce.
+ */
+export function buildAppSessions(
+  sessions: DesktopSession[],
+  now: number,
+  opts: {
+    hours?: number;
+    liveCli?: Set<string>;
+    todoIds?: Set<string>;
+    projectName?: (cwd: string) => string | undefined;
+    projectId?: (cwd: string) => string | undefined;
+    limit?: number;
+  } = {},
+): AppSession[] {
+  const window = (opts.hours ?? 12) * 3600_000;
+  const out: AppSession[] = [];
+  for (const d of sessions) {
+    if (d.isArchived || d.scheduled || !d.title || !d.lastActivityAt) continue;
+    if (now - d.lastActivityAt > window) continue;
+    const f = d.cwd ? folderInfo(d.cwd, homedir()) : undefined;
+    out.push({
+      desktopId: d.desktopId,
+      cliSessionId: d.cliSessionId,
+      title: d.title,
+      project: (d.cwd ? opts.projectName?.(d.cwd) : undefined) ?? (f ? (f.scratch ? 'bez projektu' : (f.repo ?? '—')) : '—'),
+      projectId: d.cwd ? opts.projectId?.(d.cwd) : undefined,
+      folder: f?.folder,
+      cwd: d.cwd,
+      lastActivityAt: d.lastActivityAt,
+      lastFocusedAt: d.lastFocusedAt,
+      starred: d.starred,
+      turns: d.turns,
+      live: !!(d.cliSessionId && opts.liveCli?.has(d.cliSessionId)),
+      todo: !!opts.todoIds?.has(d.desktopId),
+    });
+  }
+  return out
+    .sort((a, b) => Number(b.live) - Number(a.live) || b.lastActivityAt - a.lastActivityAt)
+    .slice(0, opts.limit ?? 40);
 }

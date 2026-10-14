@@ -144,6 +144,16 @@ znovu něco stane, vrátí se). Seznam je v panelu, v mini režimu, v menu baru 
 
 Běžné chaty claude.ai (mimo Claude Code) Kancl nevidí: nejsou na disku a API by chtělo token.
 
+## V projektech (sezení z aplikace)
+
+Hooky vidí jen sezení, která od startu serveru něco udělala. **V projektech** je proti tomu celý dnešek: každé
+nearchivované sezení aplikace Claude s aktivitou za posledních `appHours` hodin (výchozí 12), poskládané po projektech
+— včetně worktree. Běžící sezení má modrou tečku, rozdělaná z „K dokončení" zelenou, klik přepne do aplikace.
+Naplánované úlohy tu nejsou, ty patří do noční směny. Seznam je v mini režimu (sbalený na jeden řádek, stav si
+pamatuje), v panelu pod příslušným projektem (`3× dnes`, projekt s dnešní prací nespadne mezi schované klidné),
+v menu baru a na `GET /api/app`.
+
+
 ## Zdraví projektu
 
 - **GitHub Actions**: u GitHub projektů poslední 3 běhy (`gh run list`), v panelu `CI ✗` / `CI …`, v detailu odkazy.
@@ -212,7 +222,9 @@ a v telefonu otevři `http://100.x.y.z:4242/?mini=1`. Hook skript posílá dál 
 {
   "roots": ["~/Code"],
   "hidden": [],
-  "gitIntervalSec": 15,
+  "gitIntervalSec": 120,
+  "todoDays": 3,
+  "appHours": 12,
   "remoteIntervalMin": 5,
   "gitlabHosts": ["gitlab.shean.dev"],
   "night": {

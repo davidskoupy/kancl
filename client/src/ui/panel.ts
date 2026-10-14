@@ -1,4 +1,4 @@
-import type { Session, SessionStatus, Project, Worktree, MergeRequest, NightShift, Job, Todo } from '../../../shared/types.ts';
+import type { Session, SessionStatus, Project, Worktree, MergeRequest, NightShift, Job, Todo, AppSession } from '../../../shared/types.ts';
 import { attentionQueue, inQueue, needsYou } from '../../../shared/attention.ts';
 
 export interface PanelEvents {
@@ -10,6 +10,7 @@ export interface PanelEvents {
   onOpenFile: (path: string) => void;
   onTodoFocus: (id: string) => void;
   onTodoDismiss: (id: string) => void;
+  onAppFocus: (id: string) => void;
 }
 
 type Sel = { kind: 'session' | 'project' | 'job'; id: string } | null;
@@ -75,6 +76,8 @@ export class Panel {
   private projects: Project[] = [];
   private night: NightShift = { jobs: [], cloudSessions: [], scannedAt: 0 };
   private todo: Todo[] = [];
+  private app: AppSession[] = [];
+  private appProjects = new Set<string>();
   private showAllTodo = false;
   private sel: Sel = null;
   private filter: 'all' | 'attention' = (localStorage.getItem('kancl.filter') as any) || 'all';
@@ -127,6 +130,11 @@ export class Panel {
   setProjects(projects: Project[]) { this.projects = projects; this.render(); }
   setNight(n: NightShift) { this.night = n; this.render(); }
   setTodo(t: Todo[]) { this.todo = t; this.render(); }
+  setApp(a: AppSession[]) {
+    this.app = a;
+    this.appProjects = new Set(a.filter(x => !x.live && x.projectId).map(x => x.projectId!));
+    this.render();
+  }
   selectJob(id: string) {
     this.events.onSelect(null);
     this.sel = { kind: 'job', id };
@@ -169,11 +177,13 @@ export class Panel {
     const projects = [...this.projects].sort((a, b) =>
       Number(this.pinned.has(b.id)) - Number(this.pinned.has(a.id))
       || Number(a.status === 'klid') - Number(b.status === 'klid')
+      || Number(!this.appProjects.has(a.id)) - Number(!this.appProjects.has(b.id))
       || (a.status === 'klid' && b.status === 'klid' ? gi(a) - gi(b) : 0));
     let out: Group[] = projects.map(p => ({ project: p, sessions: sortS((byProject.get(p.id) ?? []).filter(hit)) }));
     if (q) out = out.filter(g => g.sessions.length || `${g.project!.name} ${g.project!.id} ${g.project!.group ?? ''}`.toLowerCase().includes(q));
     const looseHit = sortS(loose.filter(hit));
-    if (looseHit.length) out.unshift({ project: null, sessions: looseHit });
+    const looseApp = this.app.some(a => !a.live && !a.projectId);
+    if (looseHit.length || (looseApp && !q)) out.unshift({ project: null, sessions: looseHit });
     return out;
   }
 
@@ -193,6 +203,16 @@ export class Panel {
     let groups = this.groups();
     if (this.filter === 'attention') groups = groups.filter(g => g.sessions.some(s => inQueue(s)));
 
+    // dnešní sezení z aplikace (hook o nich nemusí vědět) — pod svůj projekt, živá už jsou výš
+    const appByProject = new Map<string, AppSession[]>();
+    for (const a of this.app) {
+      if (a.live) continue;
+      if (this.filter === 'attention' && !a.todo && !a.starred) continue;
+      if (this.query && !`${a.title} ${a.project} ${a.folder ?? ''}`.toLowerCase().includes(this.query)) continue;
+      const key = a.projectId && this.projects.some(p => p.id === a.projectId) ? a.projectId : LOOSE_ID;
+      appByProject.set(key, [...(appByProject.get(key) ?? []), a]);
+    }
+
     let n = 0;                          // číslování sezení
     let klidShown = 0, klidHidden = 0;
     const html: string[] = [];
@@ -203,7 +223,8 @@ export class Panel {
       const status = p ? p.status : 'prace';
       const isKlid = status === 'klid';
       const pinned = !!p && this.pinned.has(p.id);
-      if (isKlid && !pinned && !this.query && !this.showAllKlid && klidShown >= KLID_VISIBLE) { klidHidden++; continue; }
+      const appHere = appByProject.get(p?.id ?? LOOSE_ID) ?? [];
+      if (isKlid && !pinned && !appHere.length && !this.query && !this.showAllKlid && klidShown >= KLID_VISIBLE) { klidHidden++; continue; }
       if (isKlid && !pinned) klidShown++;
       // záhlaví: „v práci" pro aktivní/připnuté, pak skupiny z configu pro klidné
       const groupName = p ? (pinned ? '__pinned__' : !isKlid ? '__active__' : (p.group ?? null)) : '__loose__';
@@ -213,7 +234,7 @@ export class Panel {
         lastGroup = groupName;
       }
       const id = p?.id ?? LOOSE_ID;
-      const open = !isKlid || (this.sel?.kind === 'project' && this.sel.id === id);
+      const open = !isKlid || appHere.length > 0 || (this.sel?.kind === 'project' && this.sel.id === id);
       const selected = this.sel?.kind === 'project' && this.sel.id === id;
       const sessionsHtml = g.sessions.map(s => {
         const idx = n++;
@@ -232,15 +253,24 @@ export class Panel {
             </div>
           </li>${subs}`;
       }).join('');
+      const appHtml = appHere.map(a => `
+        <li class="appses ${a.todo ? 'todo' : ''}" data-aid="${esc(a.desktopId)}" title="${esc(a.cwd ?? '')}\notevřít v aplikaci Claude">
+          <div class="bar"></div>
+          <div>
+            <div class="name"><span>${a.starred ? '★ ' : ''}${esc(a.title)}</span><span class="proj">${a.todo ? 'k dokončení' : 'dnes'}</span></div>
+            ${a.folder ? `<div class="folder">📁 ${esc(a.folder)}</div>` : ''}
+          </div>
+          <div class="time">${dayClock(a.lastActivityAt).replace('dnes ', '')}</div>
+        </li>`).join('');
       html.push(`
         <li class="proj ${status} ${open ? 'open' : ''} ${selected ? 'selected' : ''}" data-pid="${esc(id)}">
           <div class="proj-row">
             <i class="pdot"></i>
             <span class="pname">${p ? esc(p.name) : 'mimo projekty'}</span>
             <span class="phost">${p ? `<button class="pin ${pinned ? 'on' : ''}" data-pin="${esc(p.id)}" title="${pinned ? 'odepnout' : 'připnout nahoru'}">📌</button>${HOST_LABEL[p.host]}` : ''}</span>
-            <span class="pmeta">${p ? this.projectMeta(p) : `${g.sessions.length} ${plural(g.sessions.length, 'sezení', 'sezení', 'sezení')}`}</span>
+            <span class="pmeta">${[p ? this.projectMeta(p) : (g.sessions.length ? `${g.sessions.length} ${plural(g.sessions.length, 'sezení', 'sezení', 'sezení')}` : ''), appHere.length ? `<span class="pmapp" title="sezení z aplikace za posledních pár hodin">${appHere.length}× dnes</span>` : ''].filter(Boolean).join(' · ')}</span>
           </div>
-          <ul class="sessions">${sessionsHtml}</ul>
+          <ul class="sessions">${sessionsHtml}${appHtml}</ul>
         </li>`);
     }
     if (klidHidden) html.push(`<li class="more" data-more="1">+ ${klidHidden} ${plural(klidHidden, 'další', 'další', 'dalších')}</li>`);
@@ -248,6 +278,7 @@ export class Panel {
     html.push(this.renderTodo());
     html.push(this.renderNight());
     this.list.innerHTML = html.join('');
+    this.list.querySelectorAll<HTMLElement>('.appses').forEach(li => li.addEventListener('click', e => { e.stopPropagation(); this.events.onAppFocus(li.dataset.aid!); }));
     this.list.querySelectorAll<HTMLElement>('.todo').forEach(li => li.addEventListener('click', () => this.events.onTodoFocus(li.dataset.tid!)));
     this.list.querySelectorAll<HTMLElement>('[data-tdone]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); this.events.onTodoDismiss(b.dataset.tdone!); }));
     this.list.querySelector<HTMLElement>('[data-tmore]')?.addEventListener('click', () => { this.showAllTodo = !this.showAllTodo; this.render(); });
