@@ -51,8 +51,11 @@ test('buildAppSessions: bez projektu, folder a limit', () => {
   assert.equal(buildAppSessions(many, now, { hours: 12, limit: 5 }).length, 5);
 });
 
-test('buildAppSessions: okno se dá nastavit', () => {
+test('buildAppSessions: okno se dá nastavit, výchozí jsou 4 h', () => {
   const list = [{ ...base, desktopId: 'a', cliSessionId: 'ca', title: 'Před 10 h', lastActivityAt: now - 10 * h, cwd: '/c/x' }];
   assert.equal(buildAppSessions(list, now, { hours: 12 }).length, 1);
   assert.equal(buildAppSessions(list, now, { hours: 4 }).length, 0);
+  assert.equal(buildAppSessions(list, now).length, 0, 'bez nastavení platí 4 h');
+  const fresh = [{ ...base, desktopId: 'b', cliSessionId: 'cb', title: 'Před 3 h', lastActivityAt: now - 3 * h, cwd: '/c/x' }];
+  assert.equal(buildAppSessions(fresh, now).length, 1);
 });

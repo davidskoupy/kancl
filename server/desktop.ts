@@ -131,7 +131,7 @@ export function buildAppSessions(
     limit?: number;
   } = {},
 ): AppSession[] {
-  const window = (opts.hours ?? 12) * 3600_000;
+  const window = (opts.hours ?? 4) * 3600_000;
   const out: AppSession[] = [];
   for (const d of sessions) {
     if (d.isArchived || d.scheduled || !d.title || !d.lastActivityAt) continue;

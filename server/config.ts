@@ -28,7 +28,7 @@ const DEFAULTS: Config = {
   hidden: [],
   gitIntervalSec: 120,   // stav gitu se v panelu neukazuje, stačí pomalu
   todoDays: 3,           // jak staré neviděné sezení ještě patří do „K dokončení"
-  appHours: 12,          // jak dlouho zpět se v „V projektech" ukazují sezení z aplikace
+  appHours: 4,           // jak dlouho zpět se v „V projektech" ukazují sezení z aplikace (ať je to aktuální, ne celý den)
   remoteIntervalMin: 5,
   gitlabHosts: ['gitlab.shean.dev'],
   groups: [
