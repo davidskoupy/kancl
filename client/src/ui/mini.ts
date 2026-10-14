@@ -76,15 +76,24 @@ export class Mini {
     const bezi = this.app.filter(a => a.state === 'bezi');
     const stoji = this.app.filter(a => a.state === 'stoji');
     const head = `<button class="mappk" data-apptoggle="1" title="sezení z aplikace Claude za posledních pár hodin (naplánované úlohy jsou v noční směně)">v projektech <b>${this.app.length}</b> ${this.appOpen ? '▾' : '▸'}</button>`;
+    // co čeká, dostane kartu s otázkou a tlačítky; co běží nebo stojí, jen řádek
+    const card = (a: AppSession) => {
+      const ask = a.summary?.action ?? a.summary?.detail ?? a.title;
+      const did = a.summary?.action && a.summary.detail ? a.summary.detail : '';
+      return `<div class="macard" data-aid="${esc(a.desktopId)}" title="${esc(a.folder ?? a.project)}">
+        <div class="mch"><span class="mcp">${a.starred ? '★ ' : ''}${esc(a.project)}</span><span class="mct">${esc(a.title)}</span><span class="mcw">${clockOf(a.lastActivityAt)}</span></div>
+        <div class="mcask">${esc(ask)}</div>
+        ${did ? `<div class="mcdid">udělalo: ${esc(did)}</div>` : ''}
+        <div class="mcacts"><button class="mcopen" type="button">Otevřít sezení</button><button class="mccopy" type="button" data-acopy="${esc(ask)}">Zkopírovat</button></div>
+      </div>`;
+    };
     const group = (label: string, list: AppSession[], cls: string) => list.length ? `
       <div class="mgroup ${cls}"><span class="mgname">${label}</span><span class="mgn">${list.length}</span></div>
-      ${list.map(a => {
-        const text = a.state === 'ceka' ? (a.summary?.action ?? a.summary?.detail ?? a.title) : (a.summary?.detail ?? a.title);
-        return `<span class="marow ${cls}" data-aid="${esc(a.desktopId)}" title="${esc(a.title)}${a.folder ? ` · ${esc(a.folder)}` : ''}">
-          <i></i><span class="matt">${a.starred ? '★ ' : ''}${esc(text)}</span><span class="mat">${clockOf(a.lastActivityAt)}</span>
+      ${cls === 'ceka' ? list.map(card).join('') : list.map(a => `
+        <span class="marow ${cls}" data-aid="${esc(a.desktopId)}" title="${esc(a.title)}${a.folder ? ` · ${esc(a.folder)}` : ''}">
+          <i></i><span class="matt">${a.starred ? '★ ' : ''}${esc(a.summary?.detail ?? a.title)}</span><span class="mat">${clockOf(a.lastActivityAt)}</span>
           <small class="masum">${esc(a.project)}${a.summary ? ` · ${esc(a.title)}` : ''}</small>
-        </span>`;
-      }).join('')}` : '';
+        </span>`).join('')}` : '';
     // co čeká na mě je vidět vždycky; běží/stojí se schová pod šipku, ať pruh nenaroste
     if (!this.appOpen) {
       const sum = [
@@ -100,6 +109,9 @@ export class Mini {
 
   private render() {
     const all = [...this.sessions.values()];
+    // co už je nahoře jako karta „čeká na tebe", nepatří ještě jednou do „k dokončení"
+    const cards = new Set(this.app.filter(a => a.state === 'ceka').map(a => a.desktopId));
+    const todo = this.todo.filter(t => !cards.has(t.desktopId));
     const queue = attentionQueue(all);
     const needs = queue.filter(needsYou).length;
     const working = all.filter(s => s.status === 'working').length;
@@ -124,7 +136,7 @@ export class Mini {
       </div>
       <ul class="mlist">${rows || '<li class="mempty">nikdo tě nepotřebuje</li>'}</ul>
       ${workingProjects.length ? `<div class="mwork">v práci: ${workingProjects.map(esc).join(' · ')}</div>` : ''}
-      ${this.todo.length ? `<div class="mtodo"><span class="mk">k dokončení ${this.todo.length}</span>${this.todo.slice(0, 3).map(t => `<span class="mt" data-tid="${esc(t.desktopId)}" title="${esc(t.folder ?? '')}"><span class="mtt">${t.starred ? '★ ' : ''}${esc(t.title)} <small>${esc(t.project)}</small></span>${miniSum(t.summary)}${t.folder ? `<small class="mtf">📁 ${esc(t.folder)}</small>` : ''}<button class="mtdone" data-tdone="${esc(t.desktopId)}" title="odškrtnout">✓</button></span>`).join('')}</div>` : ''}
+      ${todo.length ? `<div class="mtodo"><span class="mk">k dokončení ${todo.length}</span>${todo.slice(0, 3).map(t => `<span class="mt" data-tid="${esc(t.desktopId)}" title="${esc(t.folder ?? '')}"><span class="mtt">${t.starred ? '★ ' : ''}${esc(t.title)} <small>${esc(t.project)}</small></span>${miniSum(t.summary)}${t.folder ? `<small class="mtf">📁 ${esc(t.folder)}</small>` : ''}<button class="mtdone" data-tdone="${esc(t.desktopId)}" title="odškrtnout">✓</button></span>`).join('')}</div>` : ''}
       ${this.renderApp()}
       <div class="mfoot ${jobsErr ? 'err' : ''}">
         noční směna: ${jobsOk} ✓${jobsErr ? ` · <b>${jobsErr} ✗</b>` : ''}${next ? ` · další ${esc(next.name)} ${clock(next.nextRunAt!)}` : ''}${snapOld ? ' · <span class="old">cloud zastaralý</span>' : ''}
@@ -144,6 +156,11 @@ export class Mini {
       this.render();
     });
     this.root.querySelectorAll<HTMLElement>('[data-aid]').forEach(el => el.addEventListener('click', () => this.onApp?.(el.dataset.aid!)));
+    this.root.querySelectorAll<HTMLButtonElement>('[data-acopy]').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation();
+      navigator.clipboard?.writeText(b.dataset.acopy!);
+      const was = b.textContent; b.textContent = 'zkopírováno'; setTimeout(() => { b.textContent = was; }, 1400);
+    }));
     this.root.querySelectorAll<HTMLElement>('[data-pref]').forEach(b => b.addEventListener('click', async () => {
       if (!this.prefs) return;
       if (b.dataset.pref === 'notify') await this.prefs.setNotify(!this.prefs.get().notify);

@@ -393,7 +393,9 @@ export class Panel {
 
   private renderTodo(): string {
     const q = this.query;
-    let items = this.todo;
+    // sezení, které visí nahoře jako karta „čeká na tebe", se tu neopakuje
+    const cards = new Set(this.app.filter(a => a.state === 'ceka').map(a => a.desktopId));
+    let items = this.todo.filter(t => !cards.has(t.desktopId));
     if (q) items = items.filter(t => `${t.title} ${t.project}`.toLowerCase().includes(q));
     if (this.filter === 'attention') items = items.filter(t => t.error || t.starred);
     if (!items.length) return '';
